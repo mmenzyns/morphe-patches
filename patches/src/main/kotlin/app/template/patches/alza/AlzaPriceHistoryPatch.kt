@@ -47,10 +47,11 @@ val alzaPriceHistoryPatch = bytecodePatch(
         val priceMethod = ProductPriceSectionFingerprint.method
 
         // A. Capture price model at method entry (index 0)
+        // w4m.i has 38 registers, so p1 (v33) requires /range
         priceMethod.addInstructions(
             0,
             """
-                invoke-static {p1}, $EXTENSION_CLASS->onPriceModelCaptured(Ljava/lang/Object;)V
+                invoke-static/range {p1 .. p1}, $EXTENSION_CLASS->onPriceModelCaptured(Ljava/lang/Object;)V
             """
         )
 
@@ -69,10 +70,11 @@ val alzaPriceHistoryPatch = bytecodePatch(
             if (priceIndex != -1) priceIndex + 1 else 1
         }
 
+        // p4 (v36) requires /range
         priceMethod.addInstructions(
             targetIndex,
             """
-                invoke-static {p4}, $EXTENSION_CLASS->onPriceSectionCompose(Ljava/lang/Object;)V
+                invoke-static/range {p4 .. p4}, $EXTENSION_CLASS->onPriceSectionCompose(Ljava/lang/Object;)V
             """
         )
     }
