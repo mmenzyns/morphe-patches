@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-11-01T20:51:48",
-  "description": "## [1.2.1](https://github.com/mmenzyns/morphe-patches/compare/v1.2.0...v1.2.1) (2026-11-01)\n\n### 🐛 Bug Fixes\n\n* **alza:** Ensure PriceHistoryChartView is visible by default and fallback to inline price position ([2bcb4dc](https://github.com/mmenzyns/morphe-patches/commit/2bcb4dc4f667ea0af59c84d994d9141d16e2a2bb))",
-  "download_url": "https://github.com/mmenzyns/morphe-patches/releases/download/v1.2.1/patches-1.2.1.mpp",
+  "created_at": "2026-11-01T20:54:40",
+  "description": "## [1.2.2](https://github.com/mmenzyns/morphe-patches/compare/v1.2.1...v1.2.2) (2026-11-01)\n\n### 🐛 Bug Fixes\n\n* **alza:** Remove debug loading toast notification ([08753a9](https://github.com/mmenzyns/morphe-patches/commit/08753a9c7961f6f00f62263e24e9aa4a8576f967))",
+  "download_url": "https://github.com/mmenzyns/morphe-patches/releases/download/v1.2.2/patches-1.2.2.mpp",
   "signature_download_url": "",
-  "version": "1.2.1"
+  "version": "1.2.2"
 }

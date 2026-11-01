@@ -1,3 +1,9 @@
+## [1.2.2](https://github.com/mmenzyns/morphe-patches/compare/v1.2.1...v1.2.2) (2026-11-01)
+
+### 🐛 Bug Fixes
+
+* **alza:** Remove debug loading toast notification ([08753a9](https://github.com/mmenzyns/morphe-patches/commit/08753a9c7961f6f00f62263e24e9aa4a8576f967))
+
 ## [1.2.1](https://github.com/mmenzyns/morphe-patches/compare/v1.2.0...v1.2.1) (2026-11-01)
 
 ### 🐛 Bug Fixes
