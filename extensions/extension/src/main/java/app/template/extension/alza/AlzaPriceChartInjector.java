@@ -27,6 +27,11 @@ public class AlzaPriceChartInjector {
     // Captured synchronously at GodFragment.onCreateView entry (index 0)
     private static final ThreadLocal<Object> currentFragment = new ThreadLocal<Object>();
 
+    // Extracted directly from Compose ProductPrices model
+    private static volatile String activePrimaryPrice = null;
+    private static volatile String activeSecondaryPrice = null;
+    private static volatile Object activePriceModel = null;
+
     public static void onFragmentCreateViewStart(Object fragment) {
         try {
             if (fragment != null) {
@@ -36,6 +41,44 @@ public class AlzaPriceChartInjector {
         } catch (Throwable t) {
             Log.e(TAG, "Error in onFragmentCreateViewStart", t);
         }
+    }
+
+    /**
+     * Captured directly at w4m.i entry to immediately obtain the active price strings
+     * before layout occurs.
+     */
+    public static void onPriceModelCaptured(Object productPrices) {
+        try {
+            if (productPrices != null) {
+                activePriceModel = productPrices;
+                extractPriceStrings(productPrices);
+            }
+        } catch (Throwable t) {
+            Log.e(TAG, "Error in onPriceModelCaptured", t);
+        }
+    }
+
+    /**
+     * Hooked directly inside the price Column in w4m.i right below the price tags.
+     * Reserves vertical space inside Compose layout so all subsequent elements
+     * (Buy button, parameters, etc.) are pushed down natively.
+     */
+    public static void onPriceSectionCompose(Object composer) {
+        try {
+            if (composer != null) {
+                reserveComposeSpace(composer, 226.0f);
+            }
+        } catch (Throwable t) {
+            Log.e(TAG, "Error in onPriceSectionCompose", t);
+        }
+    }
+
+    /**
+     * Combined entry point for compatibility.
+     */
+    public static void onPriceSectionRender(Object composer, Object productPrices) {
+        onPriceModelCaptured(productPrices);
+        onPriceSectionCompose(composer);
     }
 
     public static View wrapFragmentView(View originalView, Object maybeFragment) {
@@ -155,7 +198,8 @@ public class AlzaPriceChartInjector {
             final View originalView,
             final PriceHistoryChartView chartView
     ) {
-        chartView.setVisibility(View.VISIBLE);
+        // Start INVISIBLE to prevent any initial flicker before price position is resolved
+        chartView.setVisibility(View.INVISIBLE);
 
         final Context context = originalView.getContext();
         final int defaultPriceY = (int) TypedValue.applyDimension(
@@ -168,7 +212,7 @@ public class AlzaPriceChartInjector {
 
         final ViewTreeObserver vto = originalView.getViewTreeObserver();
         vto.addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
-            private int lastY = defaultPriceY;
+            private int lastY = Integer.MIN_VALUE;
 
             @Override
             public boolean onPreDraw() {
@@ -199,9 +243,13 @@ public class AlzaPriceChartInjector {
                                     chartView.setVisibility(View.VISIBLE);
                                 }
                             }
+                        } else {
+                            if (chartView.getVisibility() != View.VISIBLE) {
+                                chartView.setVisibility(View.VISIBLE);
+                            }
                         }
-                    } else {
-                        // Fallback: keep at lastY, ensure visible
+                    } else if (lastY != Integer.MIN_VALUE) {
+                        // Fallback: keep at last known Y position
                         if (chartView.getVisibility() != View.VISIBLE) {
                             chartView.setVisibility(View.VISIBLE);
                         }
@@ -213,6 +261,131 @@ public class AlzaPriceChartInjector {
     }
 
     private static int findPriceBottom(View originalView, View rootLayout) {
+        // 1. First priority: Compose Semantics tree (works 100% reliably even with TalkBack OFF!)
+        int semanticsBottom = findPriceBottomViaSemantics(originalView, rootLayout);
+        if (semanticsBottom != Integer.MIN_VALUE) {
+            return semanticsBottom;
+        }
+
+        // 2. Second priority: AccessibilityNodeProvider (if TalkBack is active)
+        return findPriceBottomViaAccessibility(originalView, rootLayout);
+    }
+
+    private static int findPriceBottomViaSemantics(View originalView, View rootLayout) {
+        try {
+            View composeRoot = findAndroidComposeView(originalView);
+            if (composeRoot == null) composeRoot = originalView;
+
+            Method getSemanticsOwnerMethod = null;
+            for (Method m : composeRoot.getClass().getMethods()) {
+                if (m.getName().equals("getSemanticsOwner") && m.getParameterTypes().length == 0) {
+                    getSemanticsOwnerMethod = m;
+                    break;
+                }
+            }
+            if (getSemanticsOwnerMethod == null) return Integer.MIN_VALUE;
+
+            Object semanticsOwner = getSemanticsOwnerMethod.invoke(composeRoot);
+            if (semanticsOwner == null) return Integer.MIN_VALUE;
+
+            Method getRootNodeMethod = null;
+            for (Method m : semanticsOwner.getClass().getMethods()) {
+                if (m.getName().contains("getRootSemanticsNode") && m.getParameterTypes().length == 0) {
+                    getRootNodeMethod = m;
+                    break;
+                }
+            }
+            if (getRootNodeMethod == null) return Integer.MIN_VALUE;
+
+            Object rootNode = getRootNodeMethod.invoke(semanticsOwner);
+            if (rootNode == null) return Integer.MIN_VALUE;
+
+            Float bottomInRoot = findPriceNodeBottom(rootNode);
+            if (bottomInRoot != null) {
+                int[] rootLoc = new int[2];
+                rootLayout.getLocationOnScreen(rootLoc);
+
+                int[] composeLoc = new int[2];
+                composeRoot.getLocationOnScreen(composeLoc);
+
+                int spacing = (int) TypedValue.applyDimension(
+                        TypedValue.COMPLEX_UNIT_DIP,
+                        6,
+                        originalView.getResources().getDisplayMetrics()
+                );
+
+                int screenY = composeLoc[1] + Math.round(bottomInRoot);
+                return (screenY - rootLoc[1]) + spacing;
+            }
+        } catch (Throwable ignored) {
+        }
+        return Integer.MIN_VALUE;
+    }
+
+    private static Float findPriceNodeBottom(Object node) {
+        if (node == null) return null;
+        try {
+            Float maxBottom = null;
+
+            // Search children first for deepest/tightest text bounds
+            for (Method m : node.getClass().getMethods()) {
+                if (m.getName().equals("getChildren") && m.getParameterTypes().length == 0) {
+                    Object children = m.invoke(node);
+                    if (children instanceof List) {
+                        for (Object child : (List<?>) children) {
+                            Float childBottom = findPriceNodeBottom(child);
+                            if (childBottom != null) {
+                                if (maxBottom == null || childBottom > maxBottom) {
+                                    maxBottom = childBottom;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (maxBottom != null) {
+                return maxBottom;
+            }
+
+            String nodeStr = node.toString();
+            boolean matchesKeyword = false;
+            if (activeSecondaryPrice != null && !activeSecondaryPrice.isEmpty() && nodeStr.contains(activeSecondaryPrice)) {
+                matchesKeyword = true;
+            } else if (activePrimaryPrice != null && !activePrimaryPrice.isEmpty() && nodeStr.contains(activePrimaryPrice)) {
+                matchesKeyword = true;
+            } else if (nodeStr.contains("ProductPrice") || nodeStr.contains("bez DPH") || nodeStr.contains("Kč")) {
+                matchesKeyword = true;
+            }
+
+            if (matchesKeyword) {
+                return getNodeBottom(node);
+            }
+        } catch (Throwable ignored) {
+        }
+        return null;
+    }
+
+    private static Float getNodeBottom(Object node) {
+        try {
+            for (Method m : node.getClass().getMethods()) {
+                if (m.getName().equals("getBoundsInRoot") && m.getParameterTypes().length == 0) {
+                    Object rect = m.invoke(node);
+                    if (rect != null) {
+                        for (Method rm : rect.getClass().getMethods()) {
+                            if (rm.getName().equals("getBottom") && rm.getParameterTypes().length == 0) {
+                                return ((Number) rm.invoke(rect)).floatValue();
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return null;
+    }
+
+    private static int findPriceBottomViaAccessibility(View originalView, View rootLayout) {
         try {
             AccessibilityNodeProvider provider = originalView.getAccessibilityNodeProvider();
             if (provider == null && originalView instanceof ViewGroup) {
@@ -226,6 +399,9 @@ public class AlzaPriceChartInjector {
 
             if (provider != null) {
                 String[] keywords = new String[]{"bez DPH", "Garance nejlepší", "splát", "DPH", "Kč"};
+                if (activePrimaryPrice != null && !activePrimaryPrice.isEmpty()) {
+                    keywords = new String[]{activePrimaryPrice, "bez DPH", "Garance nejlepší", "splát", "DPH", "Kč"};
+                }
                 for (String kw : keywords) {
                     List<AccessibilityNodeInfo> nodes = provider.findAccessibilityNodeInfosByText(
                             kw,
@@ -252,6 +428,88 @@ public class AlzaPriceChartInjector {
         } catch (Throwable ignored) {}
 
         return Integer.MIN_VALUE;
+    }
+
+    private static View findAndroidComposeView(View view) {
+        if (view == null) return null;
+        if (view.getClass().getName().contains("AndroidComposeView")) {
+            return view;
+        }
+        if (view instanceof ViewGroup) {
+            ViewGroup vg = (ViewGroup) view;
+            for (int i = 0; i < vg.getChildCount(); i++) {
+                View found = findAndroidComposeView(vg.getChildAt(i));
+                if (found != null) return found;
+            }
+        }
+        return null;
+    }
+
+    private static void extractPriceStrings(Object productPrices) {
+        try {
+            if (productPrices == null) return;
+            activePriceModel = productPrices;
+
+            Method getPriceMethod = productPrices.getClass().getMethod("getPrice");
+            Object priceObj = getPriceMethod.invoke(productPrices);
+            if (priceObj == null) return;
+
+            String[] primaryMethodNames = new String[]{"getPrimaryPrice", "getPrice", "getPriceWithVat", "getFormattedPrice", "getText"};
+            for (String name : primaryMethodNames) {
+                try {
+                    Method m = priceObj.getClass().getMethod(name);
+                    Object res = m.invoke(priceObj);
+                    if (res != null && !res.toString().trim().isEmpty()) {
+                        activePrimaryPrice = res.toString().trim();
+                        Log.i(TAG, "extractPriceStrings: activePrimaryPrice=" + activePrimaryPrice + " (via " + name + ")");
+                        break;
+                    }
+                } catch (Throwable ignored) {}
+            }
+
+            String[] secondaryMethodNames = new String[]{"getSecondaryPrice", "getPriceWithoutVat"};
+            for (String name : secondaryMethodNames) {
+                try {
+                    Method m = priceObj.getClass().getMethod(name);
+                    Object res = m.invoke(priceObj);
+                    if (res != null && !res.toString().trim().isEmpty()) {
+                        activeSecondaryPrice = res.toString().trim();
+                        Log.i(TAG, "extractPriceStrings: activeSecondaryPrice=" + activeSecondaryPrice + " (via " + name + ")");
+                        break;
+                    }
+                } catch (Throwable ignored) {}
+            }
+        } catch (Throwable t) {
+            Log.e(TAG, "Error in extractPriceStrings", t);
+        }
+    }
+
+    private static void reserveComposeSpace(Object composer, float heightDp) {
+        try {
+            ClassLoader cl = composer.getClass().getClassLoader();
+            if (cl == null) return;
+
+            Class<?> bihClass = cl.loadClass("bih");
+            Field bField = bihClass.getField("b");
+            Object modifierInstance = bField.get(null);
+
+            Class<?> jppClass = cl.loadClass("jpp");
+            Method fMethod = jppClass.getMethod("f", bihClass, float.class);
+            Object sizedModifier = fMethod.invoke(null, modifierInstance, heightDp);
+
+            Class<?> ubrClass = cl.loadClass("ubr");
+            for (Method m : ubrClass.getMethods()) {
+                Class<?>[] pTypes = m.getParameterTypes();
+                if (pTypes.length == 2 && pTypes[1].isInstance(sizedModifier)) {
+                    m.invoke(null, composer, sizedModifier);
+                    Log.i(TAG, "reserveComposeSpace: successfully emitted " + heightDp + "dp spacer via ubr." + m.getName());
+                    return;
+                }
+            }
+            Log.w(TAG, "reserveComposeSpace: could not find matching ubr method for sizedModifier");
+        } catch (Throwable t) {
+            Log.e(TAG, "reserveComposeSpace error: " + t.getMessage(), t);
+        }
     }
 
     private static Object findGodFragment(Object obj) {
