@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-11-01T20:44:56",
-  "description": "## [1.2.0](https://github.com/mmenzyns/morphe-patches/compare/v1.1.0...v1.2.0) (2026-11-01)\n\n### ✨ New Features\n\n* **alza:** Inline scroll positioning under price tags and Hlídac shopu discount methodology ([539d242](https://github.com/mmenzyns/morphe-patches/commit/539d2422d6f71ab362f10d5608fd81f1ece5551e))",
-  "download_url": "https://github.com/mmenzyns/morphe-patches/releases/download/v1.2.0/patches-1.2.0.mpp",
+  "created_at": "2026-11-01T20:51:48",
+  "description": "## [1.2.1](https://github.com/mmenzyns/morphe-patches/compare/v1.2.0...v1.2.1) (2026-11-01)\n\n### 🐛 Bug Fixes\n\n* **alza:** Ensure PriceHistoryChartView is visible by default and fallback to inline price position ([2bcb4dc](https://github.com/mmenzyns/morphe-patches/commit/2bcb4dc4f667ea0af59c84d994d9141d16e2a2bb))",
+  "download_url": "https://github.com/mmenzyns/morphe-patches/releases/download/v1.2.1/patches-1.2.1.mpp",
   "signature_download_url": "",
-  "version": "1.2.0"
+  "version": "1.2.1"
 }

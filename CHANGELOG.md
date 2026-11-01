@@ -1,3 +1,9 @@
+## [1.2.1](https://github.com/mmenzyns/morphe-patches/compare/v1.2.0...v1.2.1) (2026-11-01)
+
+### 🐛 Bug Fixes
+
+* **alza:** Ensure PriceHistoryChartView is visible by default and fallback to inline price position ([2bcb4dc](https://github.com/mmenzyns/morphe-patches/commit/2bcb4dc4f667ea0af59c84d994d9141d16e2a2bb))
+
 ## [1.2.0](https://github.com/mmenzyns/morphe-patches/compare/v1.1.0...v1.2.0) (2026-11-01)
 
 ### ✨ New Features
