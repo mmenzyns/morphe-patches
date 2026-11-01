@@ -1,3 +1,10 @@
+## [1.3.1](https://github.com/mmenzyns/morphe-patches/compare/v1.3.0...v1.3.1) (2026-11-01)
+
+### 🐛 Bug Fixes
+
+* **alza:** Use invoke-static/range for high register indices in w4m.i ([0ae1608](https://github.com/mmenzyns/morphe-patches/commit/0ae160818f5647f703ca775b3dd52b47e8d165f9))
+* **ci:** Pre-warm Gradle and cache wrapper before semantic release ([22453bb](https://github.com/mmenzyns/morphe-patches/commit/22453bbb78c2fbb9e1a9bbd0f796120bc72b4a0a))
+
 ## [1.3.0](https://github.com/mmenzyns/morphe-patches/compare/v1.2.2...v1.3.0) (2026-11-01)
 
 ### ✨ New Features
