@@ -198,20 +198,12 @@ public class AlzaPriceChartInjector {
             final View originalView,
             final PriceHistoryChartView chartView
     ) {
-        final Context context = originalView.getContext();
-        final int defaultPriceY = (int) TypedValue.applyDimension(
-                TypedValue.COMPLEX_UNIT_DIP,
-                145,
-                context.getResources().getDisplayMetrics()
-        );
-
-        // Always start VISIBLE at default position so user never sees a blank space
-        chartView.setTranslationY(defaultPriceY);
-        chartView.setVisibility(View.VISIBLE);
+        // Start INVISIBLE so it never flashes at the top of the screen over the product image
+        chartView.setVisibility(View.INVISIBLE);
 
         final ViewTreeObserver vto = rootLayout.getViewTreeObserver();
         vto.addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
-            private int lastY = defaultPriceY;
+            private int lastY = Integer.MIN_VALUE;
 
             @Override
             public boolean onPreDraw() {
@@ -248,10 +240,9 @@ public class AlzaPriceChartInjector {
                             }
                         }
                     } else {
-                        // Fallback: stay at last known Y position (or defaultPriceY) and stay VISIBLE
-                        chartView.setTranslationY(lastY);
-                        if (chartView.getVisibility() != View.VISIBLE) {
-                            chartView.setVisibility(View.VISIBLE);
+                        // Price node not located yet or scrolled off: hide cleanly
+                        if (chartView.getVisibility() != View.INVISIBLE) {
+                            chartView.setVisibility(View.INVISIBLE);
                         }
                     }
                 } catch (Throwable t) {
@@ -263,207 +254,98 @@ public class AlzaPriceChartInjector {
     }
 
     private static int findPriceBottom(View originalView, View rootLayout) {
-        // 1. First priority: Compose Semantics tree (works 100% reliably even with TalkBack OFF!)
-        int semanticsBottom = findPriceBottomViaSemantics(originalView, rootLayout);
-        if (semanticsBottom != Integer.MIN_VALUE) {
-            return semanticsBottom;
+        View composeRoot = findAndroidComposeView(originalView);
+        if (composeRoot == null) composeRoot = originalView;
+
+        AccessibilityNodeInfo rootInfo = composeRoot.createAccessibilityNodeInfo();
+        if (rootInfo == null && composeRoot != originalView) {
+            rootInfo = originalView.createAccessibilityNodeInfo();
         }
 
-        // 2. Second priority: AccessibilityNodeProvider (if TalkBack is active)
-        return findPriceBottomViaAccessibility(originalView, rootLayout);
-    }
+        if (rootInfo != null) {
+            try {
+                Rect foundBounds = new Rect();
+                boolean found = searchPriceNode(rootInfo, foundBounds);
+                if (found && foundBounds.bottom > 0) {
+                    int[] rootLoc = new int[2];
+                    rootLayout.getLocationOnScreen(rootLoc);
 
-    private static int findPriceBottomViaSemantics(View originalView, View rootLayout) {
-        try {
-            View composeRoot = findAndroidComposeView(originalView);
-            if (composeRoot == null) composeRoot = originalView;
+                    int spacing = (int) TypedValue.applyDimension(
+                            TypedValue.COMPLEX_UNIT_DIP,
+                            8,
+                            originalView.getResources().getDisplayMetrics()
+                    );
 
-            Method getSemanticsOwnerMethod = null;
-            for (Method m : composeRoot.getClass().getMethods()) {
-                if ((m.getName().contains("SemanticsOwner") || m.getReturnType().getName().contains("SemanticsOwner"))
-                        && m.getParameterTypes().length == 0) {
-                    getSemanticsOwnerMethod = m;
-                    break;
+                    int y = (foundBounds.bottom - rootLoc[1]) + spacing;
+                    return y;
                 }
-            }
-            if (getSemanticsOwnerMethod == null) {
-                return Integer.MIN_VALUE;
-            }
-
-            Object semanticsOwner = getSemanticsOwnerMethod.invoke(composeRoot);
-            if (semanticsOwner == null) return Integer.MIN_VALUE;
-
-            Object rootNode = null;
-            for (Method m : semanticsOwner.getClass().getMethods()) {
-                String mn = m.getName();
-                if (mn.contains("RootSemanticsNode") || mn.contains("rootSemanticsNode") || mn.equals("getRootNode")) {
-                    if (m.getParameterTypes().length == 0) {
-                        rootNode = m.invoke(semanticsOwner);
-                        break;
-                    } else if (m.getParameterTypes().length == 1 && m.getParameterTypes()[0] == boolean.class) {
-                        rootNode = m.invoke(semanticsOwner, false);
-                        break;
-                    }
-                }
-            }
-            if (rootNode == null) {
-                return Integer.MIN_VALUE;
-            }
-
-            Float bottomInRoot = findPriceNodeBottom(rootNode);
-            if (bottomInRoot != null) {
-                int[] rootLoc = new int[2];
-                rootLayout.getLocationOnScreen(rootLoc);
-
-                int[] composeLoc = new int[2];
-                composeRoot.getLocationOnScreen(composeLoc);
-
-                int spacing = (int) TypedValue.applyDimension(
-                        TypedValue.COMPLEX_UNIT_DIP,
-                        6,
-                        originalView.getResources().getDisplayMetrics()
-                );
-
-                int screenY = composeLoc[1] + Math.round(bottomInRoot);
-                int result = (screenY - rootLoc[1]) + spacing;
-                return result;
-            }
-        } catch (Throwable t) {
-            Log.e(TAG, "findPriceBottomViaSemantics error", t);
-        }
-        return Integer.MIN_VALUE;
-    }
-
-    private static Float findPriceNodeBottom(Object node) {
-        if (node == null) return null;
-        try {
-            String nodeStr = node.toString();
-            boolean matchesPrice = false;
-
-            if (activeSecondaryPrice != null && !activeSecondaryPrice.isEmpty() && nodeStr.contains(activeSecondaryPrice)) {
-                matchesPrice = true;
-            } else if (activePrimaryPrice != null && !activePrimaryPrice.isEmpty() && nodeStr.contains(activePrimaryPrice)) {
-                matchesPrice = true;
-            }
-
-            if (!matchesPrice) {
-                return null;
-            }
-
-            // Check children for a more specific match first
-            List<?> children = getSemanticsChildren(node);
-            if (children != null && !children.isEmpty()) {
-                for (Object child : children) {
-                    Float childBottom = findPriceNodeBottom(child);
-                    if (childBottom != null) {
-                        return childBottom;
-                    }
-                }
-            }
-
-            // This node is the deepest/leaf node containing the price!
-            Float b = getNodeBottom(node);
-            if (b != null) {
-                Log.d(TAG, "findPriceNodeBottom: matched leaf price node, bottom=" + b);
-            }
-            return b;
-        } catch (Throwable t) {
-            Log.e(TAG, "findPriceNodeBottom error", t);
-        }
-        return null;
-    }
-
-    private static List<?> getSemanticsChildren(Object node) {
-        if (node == null) return null;
-        for (Method m : node.getClass().getMethods()) {
-            if (m.getName().equals("getChildren")) {
+            } catch (Throwable t) {
+                Log.e(TAG, "findPriceBottom error", t);
+            } finally {
                 try {
-                    if (m.getParameterTypes().length == 0) {
-                        Object res = m.invoke(node);
-                        if (res instanceof List) return (List<?>) res;
-                    } else if (m.getParameterTypes().length == 2 && m.getParameterTypes()[0] == boolean.class) {
-                        Object res = m.invoke(node, false, false);
-                        if (res instanceof List) return (List<?>) res;
-                    }
+                    rootInfo.recycle();
                 } catch (Throwable ignored) {}
             }
         }
-        return null;
-    }
-
-    private static Float getNodeBottom(Object node) {
-        if (node == null) return null;
-        try {
-            for (Method m : node.getClass().getMethods()) {
-                if (m.getName().equals("getBoundsInRoot") && m.getParameterTypes().length == 0) {
-                    Object rect = m.invoke(node);
-                    if (rect != null) {
-                        for (Method rm : rect.getClass().getMethods()) {
-                            if (rm.getName().equals("getBottom") && rm.getParameterTypes().length == 0) {
-                                return ((Number) rm.invoke(rect)).floatValue();
-                            }
-                        }
-                        try {
-                            Field bf = rect.getClass().getField("bottom");
-                            return ((Number) bf.get(rect)).floatValue();
-                        } catch (Throwable ignored) {}
-                    }
-                }
-            }
-        } catch (Throwable t) {
-            Log.e(TAG, "getNodeBottom error", t);
-        }
-        return null;
-    }
-
-    private static int findPriceBottomViaAccessibility(View originalView, View rootLayout) {
-        try {
-            AccessibilityNodeProvider provider = originalView.getAccessibilityNodeProvider();
-            if (provider == null && originalView instanceof ViewGroup) {
-                ViewGroup vg = (ViewGroup) originalView;
-                for (int i = 0; i < vg.getChildCount(); i++) {
-                    View child = vg.getChildAt(i);
-                    provider = child.getAccessibilityNodeProvider();
-                    if (provider != null) break;
-                }
-            }
-
-            if (provider != null) {
-                String[] keywords = new String[]{"bez DPH", "Garance nejlepší", "splát", "DPH", "Kč"};
-                if (activePrimaryPrice != null && !activePrimaryPrice.isEmpty()) {
-                    keywords = new String[]{activePrimaryPrice, "bez DPH", "Garance nejlepší", "splát", "DPH", "Kč"};
-                }
-                for (String kw : keywords) {
-                    List<AccessibilityNodeInfo> nodes = provider.findAccessibilityNodeInfosByText(
-                            kw,
-                            AccessibilityNodeProvider.HOST_VIEW_ID
-                    );
-                    if (nodes != null && !nodes.isEmpty()) {
-                        AccessibilityNodeInfo node = nodes.get(0);
-                        Rect bounds = new Rect();
-                        node.getBoundsInScreen(bounds);
-
-                        int[] rootLoc = new int[2];
-                        rootLayout.getLocationOnScreen(rootLoc);
-
-                        int spacing = (int) TypedValue.applyDimension(
-                                TypedValue.COMPLEX_UNIT_DIP,
-                                6,
-                                originalView.getResources().getDisplayMetrics()
-                        );
-
-                        return bounds.bottom - rootLoc[1] + spacing;
-                    }
-                }
-            }
-        } catch (Throwable ignored) {}
 
         return Integer.MIN_VALUE;
+    }
+
+    private static boolean searchPriceNode(AccessibilityNodeInfo node, Rect outBounds) {
+        if (node == null) return false;
+
+        // 1. Check children first for deepest/tightest leaf match
+        int childCount = node.getChildCount();
+        for (int i = 0; i < childCount; i++) {
+            AccessibilityNodeInfo child = node.getChild(i);
+            if (child != null) {
+                try {
+                    if (searchPriceNode(child, outBounds)) {
+                        return true;
+                    }
+                } finally {
+                    try {
+                        child.recycle();
+                    } catch (Throwable ignored) {}
+                }
+            }
+        }
+
+        // 2. Check if this node itself contains price info
+        CharSequence desc = node.getContentDescription();
+        CharSequence text = node.getText();
+        String descStr = desc != null ? desc.toString() : "";
+        String textStr = text != null ? text.toString() : "";
+
+        boolean matches = false;
+        if (activeSecondaryPrice != null && !activeSecondaryPrice.isEmpty()) {
+            if (descStr.contains(activeSecondaryPrice) || textStr.contains(activeSecondaryPrice)) {
+                matches = true;
+            }
+        }
+        if (!matches && (descStr.contains("bez DPH") || textStr.contains("bez DPH"))) {
+            matches = true;
+        }
+        if (!matches && activePrimaryPrice != null && !activePrimaryPrice.isEmpty()) {
+            if (descStr.contains(activePrimaryPrice) || textStr.contains(activePrimaryPrice)) {
+                matches = true;
+            }
+        }
+
+        if (matches) {
+            node.getBoundsInScreen(outBounds);
+            if (outBounds.bottom > 0) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static View findAndroidComposeView(View view) {
         if (view == null) return null;
-        if (view.getClass().getName().contains("AndroidComposeView")) {
+        String name = view.getClass().getName();
+        if (name.contains("AndroidComposeView") || (name.startsWith("androidx.compose.ui.platform.") && !name.endsWith("ComposeView"))) {
             return view;
         }
         if (view instanceof ViewGroup) {
@@ -528,31 +410,32 @@ public class AlzaPriceChartInjector {
             Method fMethod = null;
             for (Method m : jppClass.getMethods()) {
                 Class<?>[] pts = m.getParameterTypes();
-                if (m.getName().equals("f") && pts.length == 2 && (pts[1] == float.class || pts[1] == Float.class)) {
+                if (pts.length == 2 && (pts[1] == float.class || pts[1] == Float.class)) {
                     fMethod = m;
                     break;
                 }
             }
             if (fMethod == null) {
-                Log.w(TAG, "reserveComposeSpace: could not find jpp.f method");
+                Log.w(TAG, "reserveComposeSpace: could not find jpp height method");
                 return;
             }
             Object sizedModifier = fMethod.invoke(null, modifierInstance, heightDp);
 
-            Class<?> ubrClass = cl.loadClass("ubr");
-            for (Method m : ubrClass.getMethods()) {
+            Class<?> sf3Class = cl.loadClass("sf3");
+            Method spacerMethod = null;
+            for (Method m : sf3Class.getMethods()) {
                 Class<?>[] pTypes = m.getParameterTypes();
-                if (pTypes.length == 2 && pTypes[1].isInstance(sizedModifier)) {
-                    m.invoke(null, composer, sizedModifier);
-                    Log.i(TAG, "reserveComposeSpace: successfully emitted " + heightDp + "dp spacer via ubr." + m.getName());
-                    return;
-                } else if (pTypes.length == 3 && pTypes[0].isInstance(sizedModifier) && pTypes[1].isInstance(composer)) {
-                    m.invoke(null, sizedModifier, composer, 0);
-                    Log.i(TAG, "reserveComposeSpace: successfully emitted " + heightDp + "dp spacer via ubr." + m.getName() + " (3-arg)");
-                    return;
+                if (pTypes.length == 3 && pTypes[0].isInstance(sizedModifier) && pTypes[2] == int.class) {
+                    spacerMethod = m;
+                    break;
                 }
             }
-            Log.w(TAG, "reserveComposeSpace: could not find matching ubr method for sizedModifier");
+            if (spacerMethod != null) {
+                spacerMethod.invoke(null, sizedModifier, composer, 6);
+                Log.i(TAG, "reserveComposeSpace: successfully emitted " + heightDp + "dp spacer via sf3." + spacerMethod.getName());
+            } else {
+                Log.w(TAG, "reserveComposeSpace: could not find sf3 spacer method");
+            }
         } catch (Throwable t) {
             Log.e(TAG, "reserveComposeSpace error: " + t.getMessage(), t);
         }
