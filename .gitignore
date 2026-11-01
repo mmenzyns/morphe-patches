@@ -137,3 +137,5 @@ local.properties
 decompiled_alza/
 morphe-temporary-files/
 *.Zone.Identifier
+bin/
+*.tmp

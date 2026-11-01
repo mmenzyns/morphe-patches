@@ -1,5 +1,14 @@
 group = "app.template"
 
+repositories {
+    maven {
+        url = uri("${rootProject.rootDir}/m2-repo")
+    }
+    mavenCentral()
+    google()
+    maven { url = uri("https://jitpack.io") }
+}
+
 patches {
     about {
         name = "Menzac Patches"
