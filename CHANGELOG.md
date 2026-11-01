@@ -1,3 +1,9 @@
+## [1.0.3](https://github.com/mmenzyns/morphe-patches/compare/v1.0.2...v1.0.3) (2026-11-01)
+
+### 🐛 Bug Fixes
+
+* **alza:** Extract commodityId from WithMeta and regex fallback ([043755e](https://github.com/mmenzyns/morphe-patches/commit/043755e2744e6bf09548063dcf18047eeb0c1c1c))
+
 ## [1.0.2](https://github.com/mmenzyns/morphe-patches/compare/v1.0.1...v1.0.2) (2026-11-01)
 
 ### 🐛 Bug Fixes

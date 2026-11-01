@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-11-01T19:47:40",
-  "description": "## [1.0.2](https://github.com/mmenzyns/morphe-patches/compare/v1.0.1...v1.0.2) (2026-11-01)\n\n### 🐛 Bug Fixes\n\n* **alza:** Fix GodFragment capture and robust product extraction ([2d9d1f6](https://github.com/mmenzyns/morphe-patches/commit/2d9d1f6d3158e86d10675a9fdfc3ebef2f45e844))",
-  "download_url": "https://github.com/mmenzyns/morphe-patches/releases/download/v1.0.2/patches-1.0.2.mpp",
+  "created_at": "2026-11-01T19:55:52",
+  "description": "## [1.0.3](https://github.com/mmenzyns/morphe-patches/compare/v1.0.2...v1.0.3) (2026-11-01)\n\n### 🐛 Bug Fixes\n\n* **alza:** Extract commodityId from WithMeta and regex fallback ([043755e](https://github.com/mmenzyns/morphe-patches/commit/043755e2744e6bf09548063dcf18047eeb0c1c1c))",
+  "download_url": "https://github.com/mmenzyns/morphe-patches/releases/download/v1.0.3/patches-1.0.3.mpp",
   "signature_download_url": "",
-  "version": "1.0.2"
+  "version": "1.0.3"
 }
