@@ -1,7 +1,7 @@
 {
-  "created_at": "",
-  "description": "",
-  "download_url": "",
+  "created_at": "2026-11-01T19:40:00Z",
+  "description": "Alza Hlídač shopů inline price history chart patch",
+  "download_url": "https://github.com/mmenzyns/morphe-patches/releases/download/v1.0.0/patches-1.0.0.mpp",
   "signature_download_url": "",
-  "version": ""
+  "version": "1.0.0"
 }

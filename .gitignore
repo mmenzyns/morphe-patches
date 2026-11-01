@@ -17,6 +17,7 @@ morphe-signing.key
 
 # Package Files #
 *.jar
+!m2-repo/**/*.jar
 *.war
 *.nar
 *.ear
