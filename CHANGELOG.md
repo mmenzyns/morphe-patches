@@ -1,3 +1,9 @@
+## [1.1.0](https://github.com/mmenzyns/morphe-patches/compare/v1.0.3...v1.1.0) (2026-11-01)
+
+### ✨ New Features
+
+* **alza:** Add SVG logo, Omnibus 30d real discount, Y-axis padding, and 4 X-axis dates ([f91a0c2](https://github.com/mmenzyns/morphe-patches/commit/f91a0c267d208a46f58028f7907b3fa3bba4a625))
+
 ## [1.0.3](https://github.com/mmenzyns/morphe-patches/compare/v1.0.2...v1.0.3) (2026-11-01)
 
 ### 🐛 Bug Fixes
