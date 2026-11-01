@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-11-01T20:23:39",
-  "description": "## [1.1.0](https://github.com/mmenzyns/morphe-patches/compare/v1.0.3...v1.1.0) (2026-11-01)\n\n### ✨ New Features\n\n* **alza:** Add SVG logo, Omnibus 30d real discount, Y-axis padding, and 4 X-axis dates ([f91a0c2](https://github.com/mmenzyns/morphe-patches/commit/f91a0c267d208a46f58028f7907b3fa3bba4a625))",
-  "download_url": "https://github.com/mmenzyns/morphe-patches/releases/download/v1.1.0/patches-1.1.0.mpp",
+  "created_at": "2026-11-01T20:44:56",
+  "description": "## [1.2.0](https://github.com/mmenzyns/morphe-patches/compare/v1.1.0...v1.2.0) (2026-11-01)\n\n### ✨ New Features\n\n* **alza:** Inline scroll positioning under price tags and Hlídac shopu discount methodology ([539d242](https://github.com/mmenzyns/morphe-patches/commit/539d2422d6f71ab362f10d5608fd81f1ece5551e))",
+  "download_url": "https://github.com/mmenzyns/morphe-patches/releases/download/v1.2.0/patches-1.2.0.mpp",
   "signature_download_url": "",
-  "version": "1.1.0"
+  "version": "1.2.0"
 }

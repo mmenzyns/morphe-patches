@@ -1,3 +1,9 @@
+## [1.2.0](https://github.com/mmenzyns/morphe-patches/compare/v1.1.0...v1.2.0) (2026-11-01)
+
+### ✨ New Features
+
+* **alza:** Inline scroll positioning under price tags and Hlídac shopu discount methodology ([539d242](https://github.com/mmenzyns/morphe-patches/commit/539d2422d6f71ab362f10d5608fd81f1ece5551e))
+
 ## [1.1.0](https://github.com/mmenzyns/morphe-patches/compare/v1.0.3...v1.1.0) (2026-11-01)
 
 ### ✨ New Features
