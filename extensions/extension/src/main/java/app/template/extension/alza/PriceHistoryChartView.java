@@ -153,6 +153,22 @@ public class PriceHistoryChartView extends View {
         invalidate();
     }
 
+    @Override
+    public boolean onTouchEvent(android.view.MotionEvent event) {
+        if (event.getAction() == android.view.MotionEvent.ACTION_UP) {
+            float x = event.getX();
+            float y = event.getY();
+            // Close button in top-right area
+            if (x >= getWidth() - dpToPx(48f) && y <= dpToPx(48f)) {
+                setVisibility(View.GONE);
+                return true;
+            }
+            openHlidacWeb();
+            return true;
+        }
+        return true;
+    }
+
     private void openHlidacWeb() {
         if (commodityId == null || commodityId.isEmpty()) return;
         try {
@@ -202,6 +218,11 @@ public class PriceHistoryChartView extends View {
         cardRect.set(paddingPx / 2, paddingPx / 2, width - (paddingPx / 2), height - (paddingPx / 2));
         canvas.drawRoundRect(cardRect, cornerRadiusPx, cornerRadiusPx, cardBgPaint);
         canvas.drawRoundRect(cardRect, cornerRadiusPx, cornerRadiusPx, cardBorderPaint);
+
+        // Close button "✕" in top right
+        float closeX = width - paddingPx - dpToPx(12f);
+        float closeY = paddingPx + dpToPx(14f);
+        canvas.drawText("✕", closeX, closeY, subtitlePaint);
 
         // Title and badge
         float headerLeft = paddingPx + dpToPx(4f);

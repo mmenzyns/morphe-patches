@@ -91,7 +91,7 @@ public class AlzaPriceChartInjector {
             }
 
             Object params = extractProductParams(destination);
-            String commodityId = extractCommodityId(params);
+            String commodityId = extractCommodityId(params, destination);
             String productName = extractProductName(params);
 
             Log.i(TAG, "Extracted product: id=" + commodityId + ", name=" + productName);
@@ -102,13 +102,14 @@ public class AlzaPriceChartInjector {
             }
 
             final Context context = originalView.getContext();
+            final String finalId = commodityId;
 
             // Notify user visually
             new Handler(Looper.getMainLooper()).post(new Runnable() {
                 @Override
                 public void run() {
                     try {
-                        Toast.makeText(context, "Hlídač shopů: Načítám historii cen...", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(context, "Hlídač shopů: Načítám historii cen (#" + finalId + ")...", Toast.LENGTH_SHORT).show();
                     } catch (Throwable ignored) {}
                 }
             });
@@ -230,25 +231,63 @@ public class AlzaPriceChartInjector {
         return null;
     }
 
-    private static String extractCommodityId(Object params) {
-        if (params == null) return null;
-
-        try {
-            Method m = params.getClass().getMethod("getProductId");
-            Object res = m.invoke(params);
-            if (res instanceof Number && ((Number) res).intValue() > 0) {
-                return String.valueOf(((Number) res).intValue());
-            }
-        } catch (Throwable ignored) {}
-
-        for (Field f : params.getClass().getDeclaredFields()) {
+    private static String extractCommodityId(Object params, Object destination) {
+        if (params != null) {
+            // 1. Try getProductId() on params
             try {
-                f.setAccessible(true);
-                if (f.getName().equalsIgnoreCase("productId") || f.getName().equalsIgnoreCase("id")) {
-                    Object val = f.get(params);
-                    if (val instanceof Number && ((Number) val).intValue() > 0) {
-                        return String.valueOf(((Number) val).intValue());
+                Method m = params.getClass().getMethod("getProductId");
+                Object res = m.invoke(params);
+                if (res instanceof Number && ((Number) res).intValue() > 0) {
+                    return String.valueOf(((Number) res).intValue());
+                }
+            } catch (Throwable ignored) {}
+
+            // 2. Try declared fields for productId on params
+            for (Field f : params.getClass().getDeclaredFields()) {
+                try {
+                    f.setAccessible(true);
+                    if (f.getName().equalsIgnoreCase("productId") || f.getName().equalsIgnoreCase("id")) {
+                        Object val = f.get(params);
+                        if (val instanceof Number && ((Number) val).intValue() > 0) {
+                            return String.valueOf(((Number) val).intValue());
+                        }
                     }
+                } catch (Throwable ignored) {}
+            }
+
+            // 3. Try getMeta() -> getHref() on params (for WithMeta)
+            try {
+                Method m = params.getClass().getMethod("getMeta");
+                Object meta = m.invoke(params);
+                if (meta != null) {
+                    Method mh = meta.getClass().getMethod("getHref");
+                    Object href = mh.invoke(meta);
+                    if (href != null) {
+                        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("/product/([0-9]+)").matcher(href.toString());
+                        if (matcher.find()) {
+                            return matcher.group(1);
+                        }
+                    }
+                }
+            } catch (Throwable ignored) {}
+
+            // 4. Try regex on params.toString()
+            try {
+                String str = params.toString();
+                java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(?:/product/|productId=)([0-9]+)").matcher(str);
+                if (matcher.find()) {
+                    return matcher.group(1);
+                }
+            } catch (Throwable ignored) {}
+        }
+
+        // 5. Fallback: regex on destination.toString()
+        if (destination != null) {
+            try {
+                String destStr = destination.toString();
+                java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(?:/product/|productId=)([0-9]+)").matcher(destStr);
+                if (matcher.find()) {
+                    return matcher.group(1);
                 }
             } catch (Throwable ignored) {}
         }
