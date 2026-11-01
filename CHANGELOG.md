@@ -1,3 +1,9 @@
+## [1.3.2](https://github.com/mmenzyns/morphe-patches/compare/v1.3.1...v1.3.2) (2026-11-01)
+
+### 🐛 Bug Fixes
+
+* **alza:** Make chart view visible by default and fix Compose reflection ([217d2d5](https://github.com/mmenzyns/morphe-patches/commit/217d2d5a35e2b500bcad5570847a139e721715ae))
+
 ## [1.3.1](https://github.com/mmenzyns/morphe-patches/compare/v1.3.0...v1.3.1) (2026-11-01)
 
 ### 🐛 Bug Fixes
