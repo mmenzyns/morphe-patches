@@ -14,6 +14,7 @@ import android.graphics.Shader;
 import android.net.Uri;
 import android.util.AttributeSet;
 import android.util.TypedValue;
+import android.view.MotionEvent;
 import android.view.View;
 
 import java.text.DecimalFormat;
@@ -34,12 +35,12 @@ public class PriceHistoryChartView extends View {
     private State state = State.LOADING;
     private PriceHistoryData data;
     private String commodityId;
+    private boolean isCollapsed = false;
 
     // Paints
     private Paint cardBgPaint;
     private Paint cardBorderPaint;
     private Paint gridLinePaint;
-    private Paint titlePaint;
     private Paint subtitlePaint;
     private Paint labelPaint;
     private Paint currentCurvePaint;
@@ -47,6 +48,7 @@ public class PriceHistoryChartView extends View {
     private Paint originalCurvePaint;
     private Paint badgeBgPaint;
     private Paint badgeTextPaint;
+    private Paint toggleTextPaint;
 
     private Path currentCurvePath = new Path();
     private Path currentAreaPath = new Path();
@@ -56,7 +58,6 @@ public class PriceHistoryChartView extends View {
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("MM/yy", Locale.getDefault());
     private final DecimalFormat priceFormat;
 
-    private int heightPx;
     private float paddingPx;
     private float cornerRadiusPx;
 
@@ -75,14 +76,12 @@ public class PriceHistoryChartView extends View {
     private DecimalFormat initPriceFormat() {
         DecimalFormatSymbols symbols = new DecimalFormatSymbols(Locale.getDefault());
         symbols.setGroupingSeparator(' ');
-        DecimalFormat df = new DecimalFormat("#,###", symbols);
-        return df;
+        return new DecimalFormat("#,###", symbols);
     }
 
     private void init() {
         paddingPx = dpToPx(12f);
         cornerRadiusPx = dpToPx(12f);
-        heightPx = (int) dpToPx(180f);
 
         cardBgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         cardBorderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -93,15 +92,11 @@ public class PriceHistoryChartView extends View {
         gridLinePaint.setStyle(Paint.Style.STROKE);
         gridLinePaint.setStrokeWidth(dpToPx(1f));
 
-        titlePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        titlePaint.setTextSize(dpToPx(13f));
-        titlePaint.setFakeBoldText(true);
-
         subtitlePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        subtitlePaint.setTextSize(dpToPx(11f));
+        subtitlePaint.setTextSize(dpToPx(10.5f));
 
         labelPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        labelPaint.setTextSize(dpToPx(9f));
+        labelPaint.setTextSize(dpToPx(9.5f));
 
         badgeBgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         badgeTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -109,10 +104,14 @@ public class PriceHistoryChartView extends View {
         badgeTextPaint.setFakeBoldText(true);
         badgeTextPaint.setColor(Color.WHITE);
 
+        toggleTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        toggleTextPaint.setTextSize(dpToPx(11f));
+        toggleTextPaint.setFakeBoldText(true);
+
         currentCurvePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         currentCurvePaint.setStyle(Paint.Style.STROKE);
         currentCurvePaint.setStrokeWidth(dpToPx(2.5f));
-        currentCurvePaint.setColor(Color.parseColor("#00A651")); // Alza green
+        currentCurvePaint.setColor(Color.parseColor("#00A651")); // Alza/Hlídač green
 
         currentAreaPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         currentAreaPaint.setStyle(Paint.Style.FILL);
@@ -120,15 +119,8 @@ public class PriceHistoryChartView extends View {
         originalCurvePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         originalCurvePaint.setStyle(Paint.Style.STROKE);
         originalCurvePaint.setStrokeWidth(dpToPx(1.5f));
-        originalCurvePaint.setColor(Color.parseColor("#EF4444")); // Red/original price
+        originalCurvePaint.setColor(Color.parseColor("#EF4444")); // Red strikethrough price
         originalCurvePaint.setPathEffect(new DashPathEffect(new float[]{dpToPx(4f), dpToPx(4f)}, 0));
-
-        setOnClickListener(new OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                openHlidacWeb();
-            }
-        });
     }
 
     public void setCommodityId(String commodityId) {
@@ -153,18 +145,57 @@ public class PriceHistoryChartView extends View {
         invalidate();
     }
 
+    public void setCollapsed(boolean collapsed) {
+        if (this.isCollapsed != collapsed) {
+            this.isCollapsed = collapsed;
+            requestLayout();
+            invalidate();
+        }
+    }
+
+    public boolean isCollapsed() {
+        return isCollapsed;
+    }
+
     @Override
-    public boolean onTouchEvent(android.view.MotionEvent event) {
-        if (event.getAction() == android.view.MotionEvent.ACTION_UP) {
+    public boolean onTouchEvent(MotionEvent event) {
+        if (event.getAction() == MotionEvent.ACTION_UP) {
             float x = event.getX();
             float y = event.getY();
-            // Close button in top-right area
-            if (x >= getWidth() - dpToPx(48f) && y <= dpToPx(48f)) {
+            int width = getWidth();
+
+            // 1. Close button "✕" in top-right area (last 44dp)
+            if (x >= width - dpToPx(44f) && y <= dpToPx(44f)) {
                 setVisibility(View.GONE);
                 return true;
             }
-            openHlidacWeb();
-            return true;
+
+            // 2. Toggle button area or header when collapsed
+            if (isCollapsed) {
+                // Tapping anywhere on the collapsed bar expands it
+                isCollapsed = false;
+                requestLayout();
+                invalidate();
+                return true;
+            } else {
+                // When expanded:
+                // Check if touch is on top header (toggle or collapse)
+                if (y <= dpToPx(42f)) {
+                    // Check toggle button area [width - 90dp .. width - 44dp]
+                    if (x >= width - dpToPx(90f)) {
+                        isCollapsed = true;
+                        requestLayout();
+                        invalidate();
+                        return true;
+                    }
+                    // Tapping header opens web or toggles
+                    openHlidacWeb();
+                    return true;
+                }
+                // Tapping chart opens web
+                openHlidacWeb();
+                return true;
+            }
         }
         return true;
     }
@@ -183,7 +214,8 @@ public class PriceHistoryChartView extends View {
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         int width = MeasureSpec.getSize(widthMeasureSpec);
-        setMeasuredDimension(width, heightPx);
+        int targetHeight = isCollapsed ? (int) dpToPx(40f) : (int) dpToPx(195f);
+        setMeasuredDimension(width, targetHeight);
     }
 
     private boolean isDarkMode() {
@@ -199,74 +231,151 @@ public class PriceHistoryChartView extends View {
         int width = getWidth();
         int height = getHeight();
 
-        // Colors based on theme
-        int bgColor = dark ? Color.parseColor("#181824") : Color.parseColor("#F9FAFB");
+        // Theme colors
+        int bgColor = dark ? Color.parseColor("#181824") : Color.parseColor("#FFFFFF");
         int borderColor = dark ? Color.parseColor("#2E2E3E") : Color.parseColor("#E5E7EB");
-        int titleColor = dark ? Color.parseColor("#F3F4F6") : Color.parseColor("#111827");
         int subtitleColor = dark ? Color.parseColor("#9CA3AF") : Color.parseColor("#6B7280");
         int gridColor = dark ? Color.parseColor("#252538") : Color.parseColor("#F3F4F6");
-        int labelColor = dark ? Color.parseColor("#6B7280") : Color.parseColor("#9CA3AF");
+        int labelColor = dark ? Color.parseColor("#9CA3AF") : Color.parseColor("#6B7280");
+        int toggleColor = dark ? Color.parseColor("#00A651") : Color.parseColor("#008A43");
 
         cardBgPaint.setColor(bgColor);
         cardBorderPaint.setColor(borderColor);
         gridLinePaint.setColor(gridColor);
-        titlePaint.setColor(titleColor);
         subtitlePaint.setColor(subtitleColor);
         labelPaint.setColor(labelColor);
+        toggleTextPaint.setColor(toggleColor);
 
-        // Draw card background
+        // Draw card background & border
         cardRect.set(paddingPx / 2, paddingPx / 2, width - (paddingPx / 2), height - (paddingPx / 2));
         canvas.drawRoundRect(cardRect, cornerRadiusPx, cornerRadiusPx, cardBgPaint);
         canvas.drawRoundRect(cardRect, cornerRadiusPx, cornerRadiusPx, cardBorderPaint);
 
-        // Close button "✕" in top right
-        float closeX = width - paddingPx - dpToPx(12f);
-        float closeY = paddingPx + dpToPx(14f);
-        canvas.drawText("✕", closeX, closeY, subtitlePaint);
+        if (isCollapsed) {
+            drawCollapsedState(canvas, width, height, dark);
+        } else {
+            drawExpandedState(canvas, width, height, dark);
+        }
+    }
 
-        // Title and badge
-        float headerLeft = paddingPx + dpToPx(4f);
-        float headerTop = paddingPx + dpToPx(14f);
+    private void drawCollapsedState(Canvas canvas, int width, int height, boolean dark) {
+        float midY = height / 2f;
 
-        canvas.drawText("Hlídač shopů", headerLeft, headerTop, titlePaint);
-        float titleWidth = titlePaint.measureText("Hlídač shopů");
+        // 1. Hlídač shopů Logo
+        float logoHeight = dpToPx(15f);
+        float logoLeft = paddingPx + dpToPx(4f);
+        float logoTop = midY - (logoHeight / 2f);
+        HlidacLogo.draw(canvas, logoLeft, logoTop, logoHeight, dark);
 
-        // Discount or status badge
-        if (data != null && data.getRealDiscount() != null && data.getRealDiscount() > 0) {
-            String badgeText = "-" + Math.round(data.getRealDiscount()) + " %";
+        float curX = logoLeft + HlidacLogo.getScaledWidth(logoHeight) + dpToPx(8f);
+
+        // 2. Real discount badge (EU Omnibus 30d lowest price)
+        Double realDiscount = data != null ? data.getEffectiveRealDiscount() : null;
+        if (realDiscount != null && realDiscount > 0) {
+            String badgeText = "-" + Math.round(realDiscount) + " %";
             float badgeTextWidth = badgeTextPaint.measureText(badgeText);
-            float badgeLeft = headerLeft + titleWidth + dpToPx(8f);
-            float badgeTop = headerTop - dpToPx(11f);
+            float badgeLeft = curX;
+            float badgeTop = midY - dpToPx(8.5f);
             float badgeRight = badgeLeft + badgeTextWidth + dpToPx(10f);
-            float badgeBottom = headerTop + dpToPx(3f);
+            float badgeBottom = midY + dpToPx(8.5f);
 
             badgeBgPaint.setColor(Color.parseColor("#00A651"));
             RectF badgeRect = new RectF(badgeLeft, badgeTop, badgeRight, badgeBottom);
             canvas.drawRoundRect(badgeRect, dpToPx(4f), dpToPx(4f), badgeBgPaint);
-            canvas.drawText(badgeText, badgeLeft + dpToPx(5f), headerTop - dpToPx(1f), badgeTextPaint);
+            canvas.drawText(badgeText, badgeLeft + dpToPx(5f), midY + dpToPx(3.5f), badgeTextPaint);
+
+            curX = badgeRight + dpToPx(8f);
         }
 
-        // Subtitle: Min / Max / Current info
+        // 3. Current Price
+        if (data != null && data.getCurrentPrice() != null) {
+            String priceStr = priceFormat.format(data.getCurrentPrice()) + " Kč";
+            canvas.drawText(priceStr, curX, midY + dpToPx(4f), toggleTextPaint);
+        }
+
+        // 4. "▲ Graf" toggle hint
+        float expandX = width - paddingPx - dpToPx(48f);
+        canvas.drawText("▲ Graf", expandX, midY + dpToPx(4f), toggleTextPaint);
+
+        // 5. "✕" close button
+        float closeX = width - paddingPx - dpToPx(8f);
+        canvas.drawText("✕", closeX, midY + dpToPx(4f), subtitlePaint);
+    }
+
+    private void drawExpandedState(Canvas canvas, int width, int height, boolean dark) {
+        float headerLeft = paddingPx + dpToPx(4f);
+        float headerTop = paddingPx + dpToPx(14f);
+
+        // 1. Hlídač shopů Vector SVG Logo
+        float logoHeight = dpToPx(16f);
+        HlidacLogo.draw(canvas, headerLeft, headerTop - dpToPx(12f), logoHeight, dark);
+        float logoWidth = HlidacLogo.getScaledWidth(logoHeight);
+
+        // 2. Real discount badge (EU Omnibus 30d lowest price)
+        Double realDiscount = data != null ? data.getEffectiveRealDiscount() : null;
+        if (realDiscount != null && realDiscount > 0) {
+            String badgeText = "-" + Math.round(realDiscount) + " % reálná sleva";
+            float badgeTextWidth = badgeTextPaint.measureText(badgeText);
+            float badgeLeft = headerLeft + logoWidth + dpToPx(8f);
+            float badgeTop = headerTop - dpToPx(12f);
+            float badgeRight = badgeLeft + badgeTextWidth + dpToPx(10f);
+            float badgeBottom = headerTop + dpToPx(4f);
+
+            badgeBgPaint.setColor(Color.parseColor("#00A651"));
+            RectF badgeRect = new RectF(badgeLeft, badgeTop, badgeRight, badgeBottom);
+            canvas.drawRoundRect(badgeRect, dpToPx(4f), dpToPx(4f), badgeBgPaint);
+            canvas.drawText(badgeText, badgeLeft + dpToPx(5f), headerTop - dpToPx(0.5f), badgeTextPaint);
+        } else if (data != null && data.getClaimedDiscount() != null && data.getClaimedDiscount() > 0) {
+            // Fake discount detected: claimed discount > 0 but real discount is 0!
+            String badgeText = "Reálná sleva: 0 %";
+            float badgeTextWidth = badgeTextPaint.measureText(badgeText);
+            float badgeLeft = headerLeft + logoWidth + dpToPx(8f);
+            float badgeTop = headerTop - dpToPx(12f);
+            float badgeRight = badgeLeft + badgeTextWidth + dpToPx(10f);
+            float badgeBottom = headerTop + dpToPx(4f);
+
+            badgeBgPaint.setColor(Color.parseColor("#F59E0B")); // Amber warning
+            RectF badgeRect = new RectF(badgeLeft, badgeTop, badgeRight, badgeBottom);
+            canvas.drawRoundRect(badgeRect, dpToPx(4f), dpToPx(4f), badgeBgPaint);
+            canvas.drawText(badgeText, badgeLeft + dpToPx(5f), headerTop - dpToPx(0.5f), badgeTextPaint);
+        }
+
+        // 3. Toggle button "▼ Sbalit"
+        float toggleX = width - paddingPx - dpToPx(60f);
+        canvas.drawText("▼ Sbalit", toggleX, headerTop - dpToPx(0.5f), toggleTextPaint);
+
+        // 4. Close button "✕"
+        float closeX = width - paddingPx - dpToPx(8f);
+        canvas.drawText("✕", closeX, headerTop - dpToPx(0.5f), subtitlePaint);
+
+        // 5. Subtitle with prices (Current, Ref 30-day price, Min, Max)
         if (state == State.LOADED && data != null) {
             StringBuilder sb = new StringBuilder();
+            if (data.getCurrentPrice() != null) {
+                sb.append("Aktuální: ").append(priceFormat.format(data.getCurrentPrice())).append(" Kč");
+            }
+
+            Double refPrice = data.getEffectiveReferencePrice();
+            if (refPrice != null && refPrice > 0) {
+                if (sb.length() > 0) sb.append("  |  ");
+                sb.append("Ref. 30 dní: ").append(priceFormat.format(refPrice)).append(" Kč");
+            }
+
             if (data.getMinPrice() != null) {
+                if (sb.length() > 0) sb.append("  |  ");
                 sb.append("Min: ").append(priceFormat.format(data.getMinPrice())).append(" Kč");
             }
             if (data.getMaxPrice() != null) {
                 if (sb.length() > 0) sb.append("  |  ");
                 sb.append("Max: ").append(priceFormat.format(data.getMaxPrice())).append(" Kč");
             }
-            if (data.getIdentifier() != null && !data.getIdentifier().isEmpty()) {
-                if (sb.length() > 0) sb.append("  |  ");
-                sb.append(data.getIdentifier());
-            }
 
-            canvas.drawText(sb.toString(), headerLeft, headerTop + dpToPx(16f), subtitlePaint);
+            canvas.drawText(sb.toString(), headerLeft, headerTop + dpToPx(15f), subtitlePaint);
         }
 
-        // Draw State or Chart
+        // 6. Draw Chart or States
         float plotLeft = headerLeft;
-        float plotTop = headerTop + dpToPx(26f);
+        float plotTop = headerTop + dpToPx(24f);
         float plotRight = width - paddingPx - dpToPx(4f);
         float plotBottom = height - paddingPx - dpToPx(16f);
 
@@ -309,28 +418,54 @@ public class PriceHistoryChartView extends View {
             maxPrice = minPrice + 1.0;
         }
 
-        // Grid lines (3 horizontal lines)
+        // --- Y-AXIS PADDING FIX ---
+        // Measure maximum Y-axis label width so chart curve stops BEFORE the Y-axis labels!
+        String topLabel = priceFormat.format(maxPrice) + " Kč";
+        String btmLabel = priceFormat.format(minPrice) + " Kč";
+        float maxLabelWidth = Math.max(labelPaint.measureText(topLabel), labelPaint.measureText(btmLabel));
+        float yGutter = maxLabelWidth + dpToPx(8f);
+
+        // Chart curve ends at chartRight; Y labels are drawn in [chartRight + 6dp .. right]
+        float chartRight = right - yGutter;
+        if (chartRight <= left + dpToPx(60f)) {
+            chartRight = right; // Fallback for very small screens
+        }
+
+        // Draw 3 horizontal grid lines and Y-axis labels in the right gutter
         int gridLines = 3;
         for (int i = 0; i < gridLines; i++) {
             float y = top + (bottom - top) * i / (gridLines - 1f);
-            canvas.drawLine(left, y, right, y, gridLinePaint);
+            canvas.drawLine(left, y, chartRight, y, gridLinePaint);
 
             double priceVal = maxPrice - (maxPrice - minPrice) * i / (gridLines - 1f);
             String label = priceFormat.format(priceVal) + " Kč";
-            canvas.drawText(label, right - labelPaint.measureText(label), y - dpToPx(3f), labelPaint);
+            canvas.drawText(label, right - labelPaint.measureText(label), y + dpToPx(3.5f), labelPaint);
         }
 
-        // Date markers at start and end
+        // --- X-AXIS DATES (3 or 4 evenly spaced dates) ---
         long minTime = points.get(0).timestamp;
         long maxTime = points.get(count - 1).timestamp;
         if (maxTime <= minTime) maxTime = minTime + 1;
 
-        String startDate = dateFormat.format(new Date(minTime));
-        String endDate = dateFormat.format(new Date(maxTime));
-        canvas.drawText(startDate, left, bottom + dpToPx(12f), labelPaint);
-        canvas.drawText(endDate, right - labelPaint.measureText(endDate), bottom + dpToPx(12f), labelPaint);
+        int numDates = (chartRight - left) > dpToPx(240f) ? 4 : 3;
+        for (int i = 0; i < numDates; i++) {
+            float frac = (float) i / (float) (numDates - 1);
+            long time = minTime + (long) ((maxTime - minTime) * frac);
+            String dateText = dateFormat.format(new Date(time));
+            float dWidth = labelPaint.measureText(dateText);
 
-        // Build Paths
+            float dx;
+            if (i == 0) {
+                dx = left;
+            } else if (i == numDates - 1) {
+                dx = chartRight - dWidth;
+            } else {
+                dx = left + (chartRight - left) * frac - (dWidth / 2f);
+            }
+            canvas.drawText(dateText, dx, bottom + dpToPx(13f), labelPaint);
+        }
+
+        // --- BUILD & DRAW CURVE & AREA ---
         currentCurvePath.reset();
         currentAreaPath.reset();
 
@@ -343,19 +478,19 @@ public class PriceHistoryChartView extends View {
 
         for (int i = 1; i < count; i++) {
             PriceHistoryData.PricePoint p = points.get(i);
-            float x = left + (float) ((p.timestamp - minTime) / (double) (maxTime - minTime) * (right - left));
+            float x = left + (float) ((p.timestamp - minTime) / (double) (maxTime - minTime) * (chartRight - left));
             float y = bottom - (float) ((p.price - minPrice) / (maxPrice - minPrice) * (bottom - top));
 
             currentCurvePath.lineTo(x, y);
             currentAreaPath.lineTo(x, y);
         }
 
-        currentAreaPath.lineTo(right, bottom);
+        currentAreaPath.lineTo(chartRight, bottom);
         currentAreaPath.close();
 
         // Shaded area gradient under curve
         int curveColor = Color.parseColor("#00A651");
-        int startGradColor = Color.argb(80, Color.red(curveColor), Color.green(curveColor), Color.blue(curveColor));
+        int startGradColor = Color.argb(75, Color.red(curveColor), Color.green(curveColor), Color.blue(curveColor));
         int endGradColor = Color.argb(0, Color.red(curveColor), Color.green(curveColor), Color.blue(curveColor));
 
         currentAreaPaint.setShader(new LinearGradient(
@@ -367,13 +502,13 @@ public class PriceHistoryChartView extends View {
         canvas.drawPath(currentAreaPath, currentAreaPaint);
         canvas.drawPath(currentCurvePath, currentCurvePaint);
 
-        // Optional original price line (strikethrough price)
+        // Optional original price line (strikethrough / crossed price)
         List<PriceHistoryData.PricePoint> origPoints = data.getOriginalPricePoints();
         if (origPoints != null && origPoints.size() >= 2) {
             originalCurvePath.reset();
             boolean first = true;
             for (PriceHistoryData.PricePoint op : origPoints) {
-                float ox = left + (float) ((op.timestamp - minTime) / (double) (maxTime - minTime) * (right - left));
+                float ox = left + (float) ((op.timestamp - minTime) / (double) (maxTime - minTime) * (chartRight - left));
                 float oy = bottom - (float) ((op.price - minPrice) / (maxPrice - minPrice) * (bottom - top));
                 if (first) {
                     originalCurvePath.moveTo(ox, oy);
@@ -394,4 +529,3 @@ public class PriceHistoryChartView extends View {
         );
     }
 }
-

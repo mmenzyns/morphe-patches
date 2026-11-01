@@ -161,6 +161,7 @@ public class HlidacShopuClient {
             Double realDiscount = null;
             Double claimedDiscount = null;
             Double currentPriceMeta = null;
+            Double commonPriceMeta = null;
 
             if (metadata != null) {
                 if (metadata.has("name") && !metadata.isNull("name")) {
@@ -174,6 +175,11 @@ public class HlidacShopuClient {
                 }
                 if (metadata.has("currentPrice") && !metadata.isNull("currentPrice")) {
                     currentPriceMeta = metadata.optDouble("currentPrice");
+                }
+                if (metadata.has("commonPrice") && !metadata.isNull("commonPrice")) {
+                    commonPriceMeta = metadata.optDouble("commonPrice");
+                } else if (metadata.has("referencePrice") && !metadata.isNull("referencePrice")) {
+                    commonPriceMeta = metadata.optDouble("referencePrice");
                 }
             }
 
@@ -229,6 +235,7 @@ public class HlidacShopuClient {
                     name,
                     identifier,
                     current,
+                    commonPriceMeta,
                     min,
                     max,
                     realDiscount,
@@ -242,7 +249,7 @@ public class HlidacShopuClient {
                     commodityId,
                     defaultProductName,
                     identifier,
-                    null, null, null, null, null,
+                    null, null, null, null, null, null,
                     null, null
             );
         }
