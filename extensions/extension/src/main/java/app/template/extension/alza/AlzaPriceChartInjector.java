@@ -198,9 +198,6 @@ public class AlzaPriceChartInjector {
             final View originalView,
             final PriceHistoryChartView chartView
     ) {
-        // Start INVISIBLE to prevent any initial flicker before price position is resolved
-        chartView.setVisibility(View.INVISIBLE);
-
         final Context context = originalView.getContext();
         final int defaultPriceY = (int) TypedValue.applyDimension(
                 TypedValue.COMPLEX_UNIT_DIP,
@@ -208,11 +205,13 @@ public class AlzaPriceChartInjector {
                 context.getResources().getDisplayMetrics()
         );
 
+        // Always start VISIBLE at default position so user never sees a blank space
         chartView.setTranslationY(defaultPriceY);
+        chartView.setVisibility(View.VISIBLE);
 
-        final ViewTreeObserver vto = originalView.getViewTreeObserver();
+        final ViewTreeObserver vto = rootLayout.getViewTreeObserver();
         vto.addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
-            private int lastY = Integer.MIN_VALUE;
+            private int lastY = defaultPriceY;
 
             @Override
             public boolean onPreDraw() {
@@ -248,13 +247,16 @@ public class AlzaPriceChartInjector {
                                 chartView.setVisibility(View.VISIBLE);
                             }
                         }
-                    } else if (lastY != Integer.MIN_VALUE) {
-                        // Fallback: keep at last known Y position
+                    } else {
+                        // Fallback: stay at last known Y position (or defaultPriceY) and stay VISIBLE
+                        chartView.setTranslationY(lastY);
                         if (chartView.getVisibility() != View.VISIBLE) {
                             chartView.setVisibility(View.VISIBLE);
                         }
                     }
-                } catch (Throwable ignored) {}
+                } catch (Throwable t) {
+                    Log.e(TAG, "onPreDraw error", t);
+                }
                 return true;
             }
         });
@@ -278,27 +280,35 @@ public class AlzaPriceChartInjector {
 
             Method getSemanticsOwnerMethod = null;
             for (Method m : composeRoot.getClass().getMethods()) {
-                if (m.getName().equals("getSemanticsOwner") && m.getParameterTypes().length == 0) {
+                if ((m.getName().contains("SemanticsOwner") || m.getReturnType().getName().contains("SemanticsOwner"))
+                        && m.getParameterTypes().length == 0) {
                     getSemanticsOwnerMethod = m;
                     break;
                 }
             }
-            if (getSemanticsOwnerMethod == null) return Integer.MIN_VALUE;
+            if (getSemanticsOwnerMethod == null) {
+                return Integer.MIN_VALUE;
+            }
 
             Object semanticsOwner = getSemanticsOwnerMethod.invoke(composeRoot);
             if (semanticsOwner == null) return Integer.MIN_VALUE;
 
-            Method getRootNodeMethod = null;
+            Object rootNode = null;
             for (Method m : semanticsOwner.getClass().getMethods()) {
-                if (m.getName().contains("getRootSemanticsNode") && m.getParameterTypes().length == 0) {
-                    getRootNodeMethod = m;
-                    break;
+                String mn = m.getName();
+                if (mn.contains("RootSemanticsNode") || mn.contains("rootSemanticsNode") || mn.equals("getRootNode")) {
+                    if (m.getParameterTypes().length == 0) {
+                        rootNode = m.invoke(semanticsOwner);
+                        break;
+                    } else if (m.getParameterTypes().length == 1 && m.getParameterTypes()[0] == boolean.class) {
+                        rootNode = m.invoke(semanticsOwner, false);
+                        break;
+                    }
                 }
             }
-            if (getRootNodeMethod == null) return Integer.MIN_VALUE;
-
-            Object rootNode = getRootNodeMethod.invoke(semanticsOwner);
-            if (rootNode == null) return Integer.MIN_VALUE;
+            if (rootNode == null) {
+                return Integer.MIN_VALUE;
+            }
 
             Float bottomInRoot = findPriceNodeBottom(rootNode);
             if (bottomInRoot != null) {
@@ -315,9 +325,11 @@ public class AlzaPriceChartInjector {
                 );
 
                 int screenY = composeLoc[1] + Math.round(bottomInRoot);
-                return (screenY - rootLoc[1]) + spacing;
+                int result = (screenY - rootLoc[1]) + spacing;
+                return result;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable t) {
+            Log.e(TAG, "findPriceBottomViaSemantics error", t);
         }
         return Integer.MIN_VALUE;
     }
@@ -325,48 +337,62 @@ public class AlzaPriceChartInjector {
     private static Float findPriceNodeBottom(Object node) {
         if (node == null) return null;
         try {
-            Float maxBottom = null;
+            String nodeStr = node.toString();
+            boolean matchesPrice = false;
 
-            // Search children first for deepest/tightest text bounds
-            for (Method m : node.getClass().getMethods()) {
-                if (m.getName().equals("getChildren") && m.getParameterTypes().length == 0) {
-                    Object children = m.invoke(node);
-                    if (children instanceof List) {
-                        for (Object child : (List<?>) children) {
-                            Float childBottom = findPriceNodeBottom(child);
-                            if (childBottom != null) {
-                                if (maxBottom == null || childBottom > maxBottom) {
-                                    maxBottom = childBottom;
-                                }
-                            }
-                        }
+            if (activeSecondaryPrice != null && !activeSecondaryPrice.isEmpty() && nodeStr.contains(activeSecondaryPrice)) {
+                matchesPrice = true;
+            } else if (activePrimaryPrice != null && !activePrimaryPrice.isEmpty() && nodeStr.contains(activePrimaryPrice)) {
+                matchesPrice = true;
+            }
+
+            if (!matchesPrice) {
+                return null;
+            }
+
+            // Check children for a more specific match first
+            List<?> children = getSemanticsChildren(node);
+            if (children != null && !children.isEmpty()) {
+                for (Object child : children) {
+                    Float childBottom = findPriceNodeBottom(child);
+                    if (childBottom != null) {
+                        return childBottom;
                     }
                 }
             }
 
-            if (maxBottom != null) {
-                return maxBottom;
+            // This node is the deepest/leaf node containing the price!
+            Float b = getNodeBottom(node);
+            if (b != null) {
+                Log.d(TAG, "findPriceNodeBottom: matched leaf price node, bottom=" + b);
             }
+            return b;
+        } catch (Throwable t) {
+            Log.e(TAG, "findPriceNodeBottom error", t);
+        }
+        return null;
+    }
 
-            String nodeStr = node.toString();
-            boolean matchesKeyword = false;
-            if (activeSecondaryPrice != null && !activeSecondaryPrice.isEmpty() && nodeStr.contains(activeSecondaryPrice)) {
-                matchesKeyword = true;
-            } else if (activePrimaryPrice != null && !activePrimaryPrice.isEmpty() && nodeStr.contains(activePrimaryPrice)) {
-                matchesKeyword = true;
-            } else if (nodeStr.contains("ProductPrice") || nodeStr.contains("bez DPH") || nodeStr.contains("Kč")) {
-                matchesKeyword = true;
+    private static List<?> getSemanticsChildren(Object node) {
+        if (node == null) return null;
+        for (Method m : node.getClass().getMethods()) {
+            if (m.getName().equals("getChildren")) {
+                try {
+                    if (m.getParameterTypes().length == 0) {
+                        Object res = m.invoke(node);
+                        if (res instanceof List) return (List<?>) res;
+                    } else if (m.getParameterTypes().length == 2 && m.getParameterTypes()[0] == boolean.class) {
+                        Object res = m.invoke(node, false, false);
+                        if (res instanceof List) return (List<?>) res;
+                    }
+                } catch (Throwable ignored) {}
             }
-
-            if (matchesKeyword) {
-                return getNodeBottom(node);
-            }
-        } catch (Throwable ignored) {
         }
         return null;
     }
 
     private static Float getNodeBottom(Object node) {
+        if (node == null) return null;
         try {
             for (Method m : node.getClass().getMethods()) {
                 if (m.getName().equals("getBoundsInRoot") && m.getParameterTypes().length == 0) {
@@ -377,10 +403,15 @@ public class AlzaPriceChartInjector {
                                 return ((Number) rm.invoke(rect)).floatValue();
                             }
                         }
+                        try {
+                            Field bf = rect.getClass().getField("bottom");
+                            return ((Number) bf.get(rect)).floatValue();
+                        } catch (Throwable ignored) {}
                     }
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable t) {
+            Log.e(TAG, "getNodeBottom error", t);
         }
         return null;
     }
@@ -494,7 +525,18 @@ public class AlzaPriceChartInjector {
             Object modifierInstance = bField.get(null);
 
             Class<?> jppClass = cl.loadClass("jpp");
-            Method fMethod = jppClass.getMethod("f", bihClass, float.class);
+            Method fMethod = null;
+            for (Method m : jppClass.getMethods()) {
+                Class<?>[] pts = m.getParameterTypes();
+                if (m.getName().equals("f") && pts.length == 2 && (pts[1] == float.class || pts[1] == Float.class)) {
+                    fMethod = m;
+                    break;
+                }
+            }
+            if (fMethod == null) {
+                Log.w(TAG, "reserveComposeSpace: could not find jpp.f method");
+                return;
+            }
             Object sizedModifier = fMethod.invoke(null, modifierInstance, heightDp);
 
             Class<?> ubrClass = cl.loadClass("ubr");
@@ -503,6 +545,10 @@ public class AlzaPriceChartInjector {
                 if (pTypes.length == 2 && pTypes[1].isInstance(sizedModifier)) {
                     m.invoke(null, composer, sizedModifier);
                     Log.i(TAG, "reserveComposeSpace: successfully emitted " + heightDp + "dp spacer via ubr." + m.getName());
+                    return;
+                } else if (pTypes.length == 3 && pTypes[0].isInstance(sizedModifier) && pTypes[1].isInstance(composer)) {
+                    m.invoke(null, sizedModifier, composer, 0);
+                    Log.i(TAG, "reserveComposeSpace: successfully emitted " + heightDp + "dp spacer via ubr." + m.getName() + " (3-arg)");
                     return;
                 }
             }
