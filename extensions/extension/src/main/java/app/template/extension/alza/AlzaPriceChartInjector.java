@@ -15,7 +15,6 @@ import android.view.accessibility.AccessibilityNodeInfo;
 import android.view.accessibility.AccessibilityNodeProvider;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
-import android.widget.Toast;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -107,17 +106,6 @@ public class AlzaPriceChartInjector {
             }
 
             final Context context = originalView.getContext();
-            final String finalId = commodityId;
-
-            // Notify user visually
-            new Handler(Looper.getMainLooper()).post(new Runnable() {
-                @Override
-                public void run() {
-                    try {
-                        Toast.makeText(context, "Hlídač shopů: Načítám historii cen (#" + finalId + ")...", Toast.LENGTH_SHORT).show();
-                    } catch (Throwable ignored) {}
-                }
-            });
 
             final FrameLayout rootLayout = new FrameLayout(context);
             rootLayout.setLayoutParams(new ViewGroup.LayoutParams(
