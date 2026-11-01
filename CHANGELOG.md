@@ -1,3 +1,9 @@
+## [1.3.3](https://github.com/mmenzyns/morphe-patches/compare/v1.3.2...v1.3.3) (2026-11-01)
+
+### 🐛 Bug Fixes
+
+* **alza:** Fix price node detection in accessibility tree and Compose spacer ([00cc241](https://github.com/mmenzyns/morphe-patches/commit/00cc241cad4ffd28503a86ffdefe5f980763d257))
+
 ## [1.3.2](https://github.com/mmenzyns/morphe-patches/compare/v1.3.1...v1.3.2) (2026-11-01)
 
 ### 🐛 Bug Fixes
