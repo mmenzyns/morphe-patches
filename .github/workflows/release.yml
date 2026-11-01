@@ -24,6 +24,7 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '21'
+          cache: 'gradle'
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -33,6 +34,12 @@ jobs:
 
       - name: Install dependencies
         run: npm install
+
+      - name: Pre-warm Gradle
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+        run: ./gradlew --no-daemon tasks
 
       # Semantic release runs its own Gradle build command.
       # Only dev and main branch will generate a release as specified by .releaserc
