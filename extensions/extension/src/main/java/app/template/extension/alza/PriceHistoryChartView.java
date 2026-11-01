@@ -225,7 +225,7 @@ public class PriceHistoryChartView extends View {
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         int width = MeasureSpec.getSize(widthMeasureSpec);
-        int targetHeight = isCollapsed ? (int) dpToPx(38f) : (int) dpToPx(195f);
+        int targetHeight = isCollapsed ? (int) dpToPx(38f) : (int) dpToPx(210f);
         setMeasuredDimension(width, targetHeight);
     }
 
@@ -362,20 +362,19 @@ public class PriceHistoryChartView extends View {
 
             if (noteSb.length() > 0) {
                 float noteX = headerLeft + labelWidth + valWidth + dpToPx(10f);
-                // If it fits on the same row, draw it there; otherwise right below
                 if (noteX + subtitlePaint.measureText(noteSb.toString()) < (width - paddingPx - dpToPx(8f))) {
                     canvas.drawText(noteSb.toString(), noteX, discountRowY, subtitlePaint);
                 } else {
-                    canvas.drawText(noteSb.toString(), headerLeft, discountRowY + dpToPx(12f), subtitlePaint);
+                    canvas.drawText(noteSb.toString(), headerLeft, discountRowY + dpToPx(14f), subtitlePaint);
                 }
             }
         }
 
         // 4. Draw Chart or Loading/Empty/Error states
         float plotLeft = headerLeft;
-        float plotTop = headerTop + dpToPx(28f);
+        float plotTop = headerTop + dpToPx(36f);
         float plotRight = width - paddingPx - dpToPx(4f);
-        float plotBottom = height - paddingPx - dpToPx(16f);
+        float plotBottom = height - paddingPx - dpToPx(14f);
 
         switch (state) {
             case LOADING:

@@ -147,8 +147,7 @@ public class AlzaPriceChartInjector {
             );
             chartLp.setMargins(sideMargin, 0, sideMargin, 0);
 
-            // Initially set invisible until measured and aligned directly under price tags
-            chartView.setVisibility(View.INVISIBLE);
+            // Add chart view to root layout
             rootLayout.addView(chartView, chartLp);
 
             setupInlineScrollSync(rootLayout, originalView, chartView);
@@ -168,9 +167,20 @@ public class AlzaPriceChartInjector {
             final View originalView,
             final PriceHistoryChartView chartView
     ) {
+        chartView.setVisibility(View.VISIBLE);
+
+        final Context context = originalView.getContext();
+        final int defaultPriceY = (int) TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_DIP,
+                145,
+                context.getResources().getDisplayMetrics()
+        );
+
+        chartView.setTranslationY(defaultPriceY);
+
         final ViewTreeObserver vto = originalView.getViewTreeObserver();
         vto.addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
-            private int lastY = Integer.MIN_VALUE;
+            private int lastY = defaultPriceY;
 
             @Override
             public boolean onPreDraw() {
@@ -201,14 +211,12 @@ public class AlzaPriceChartInjector {
                                     chartView.setVisibility(View.VISIBLE);
                                 }
                             }
-                        } else {
-                            if (chartView.getVisibility() != View.VISIBLE) {
-                                chartView.setVisibility(View.VISIBLE);
-                            }
                         }
-                    } else if (lastY != Integer.MIN_VALUE) {
-                        // Keep last known position if transiently null
-                        chartView.setTranslationY(lastY);
+                    } else {
+                        // Fallback: keep at lastY, ensure visible
+                        if (chartView.getVisibility() != View.VISIBLE) {
+                            chartView.setVisibility(View.VISIBLE);
+                        }
                     }
                 } catch (Throwable ignored) {}
                 return true;
@@ -219,6 +227,15 @@ public class AlzaPriceChartInjector {
     private static int findPriceBottom(View originalView, View rootLayout) {
         try {
             AccessibilityNodeProvider provider = originalView.getAccessibilityNodeProvider();
+            if (provider == null && originalView instanceof ViewGroup) {
+                ViewGroup vg = (ViewGroup) originalView;
+                for (int i = 0; i < vg.getChildCount(); i++) {
+                    View child = vg.getChildAt(i);
+                    provider = child.getAccessibilityNodeProvider();
+                    if (provider != null) break;
+                }
+            }
+
             if (provider != null) {
                 String[] keywords = new String[]{"bez DPH", "Garance nejlepší", "splát", "DPH", "Kč"};
                 for (String kw : keywords) {
