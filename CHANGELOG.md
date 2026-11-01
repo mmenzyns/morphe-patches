@@ -1,3 +1,9 @@
+## [1.0.1](https://github.com/mmenzyns/morphe-patches/compare/v1.0.0...v1.0.1) (2026-11-01)
+
+### 🐛 Bug Fixes
+
+* Remove XYZ template example patch ([5721cee](https://github.com/mmenzyns/morphe-patches/commit/5721ceeee21b7593147fd4a70f8556dd4d56ebb4))
+
 ## 1.0.0 (2026-11-01)
 
 ### ✨ New Features

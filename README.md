@@ -19,7 +19,7 @@ Click the button below, or manually add this repo url to Morphe Manager: https:/
 ## 🩹 Patches list
 
 <!-- PATCHES_START EXPANDED -->
-> **[v1.0.0](https://github.com/mmenzyns/morphe-patches/releases/tag/v1.0.0)**&nbsp;&nbsp;•&nbsp;&nbsp;`main`&nbsp;&nbsp;•&nbsp;&nbsp;2 patches total
+> **[v1.0.1](https://github.com/mmenzyns/morphe-patches/releases/tag/v1.0.1)**&nbsp;&nbsp;•&nbsp;&nbsp;`main`&nbsp;&nbsp;•&nbsp;&nbsp;1 patches total
 <details open>
 <summary>📦 Alza&nbsp;&nbsp;•&nbsp;&nbsp;1 patch</summary>
 <br>
@@ -34,23 +34,6 @@ Click the button below, or manually add this repo url to Morphe Manager: https:/
 | 💊&nbsp;Patch | 📜&nbsp;Description | ⚙️&nbsp;Options |
 |----------|----------------|-----------|
 | [Alza Hlídač shopů Price History](#alza-hl-da-shop-price-history) | Displays inline price history chart from Hlídač shopů in product detail screen. |  |
-
-</details>
-
-<details open>
-<summary>📦 XYZ app&nbsp;&nbsp;•&nbsp;&nbsp;1 patch</summary>
-<br>
-
-**Package name:** `com.example.app`
-
-**🎯 Supported versions:**
-
-| 2.0.0 | 1.0.2 |
-| :---: | :---: |
-
-| 💊&nbsp;Patch | 📜&nbsp;Description | ⚙️&nbsp;Options |
-|----------|----------------|-----------|
-| [Example Patch](#example-patch) | Example patch to start with. |  |
 
 </details>
 
