@@ -132,3 +132,7 @@ node_modules/
 # Ignore IDEA files
 .idea/
 local.properties
+
+decompiled_alza/
+morphe-temporary-files/
+*.Zone.Identifier

@@ -6,6 +6,22 @@ import app.morphe.patcher.patch.Compatibility
 import app.morphe.patcher.patch.SupportedAbi
 
 object Constants {
+    val COMPATIBILITY_ALZA = Compatibility(
+        name = "Alza",
+        packageName = "cz.alza.eshop",
+        apkFileType = ApkFileType.APK,
+        appIconColor = 0x00A651,
+        targets = listOf(
+            AppTarget(
+                version = "2026.21.0"
+            ),
+            AppTarget(
+                version = null,
+                isExperimental = true
+            )
+        )
+    )
+
     val COMPATIBILITY_EXAMPLE = Compatibility(
         name = "XYZ app", // App name as it appears in the Android launcher.
         packageName = "com.example.app",
