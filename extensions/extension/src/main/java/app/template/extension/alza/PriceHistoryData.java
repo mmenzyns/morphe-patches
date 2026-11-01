@@ -98,79 +98,138 @@ public class PriceHistoryData implements Serializable {
         return Collections.unmodifiableList(originalPricePoints);
     }
 
+    public static class DiscountCalculation implements Serializable {
+        public final Double realDiscountPercent; // e.g. 18.0
+        public final Double referencePrice;      // e.g. 1490.0
+        public final String methodologyNote;     // e.g. "podle nejnižší ceny za 30 dní před slevou"
+
+        public DiscountCalculation(Double realDiscountPercent, Double referencePrice, String methodologyNote) {
+            this.realDiscountPercent = realDiscountPercent;
+            this.referencePrice = referencePrice;
+            this.methodologyNote = methodologyNote;
+        }
+    }
+
     public boolean hasData() {
         return !currentPricePoints.isEmpty();
     }
 
     /**
-     * Calculates the real 30-day reference price before the current price level started
-     * (in accordance with the EU Omnibus directive / Hlídač shopů methodology).
+     * Calculates real discount according to exact Hlídač shopů methodology:
+     * 1. Continuous price decrease <= 180 days:
+     *    Lowest price in 30 days prior to the start of the discount campaign.
+     * 2. Continuous progressive decrease (postupné zlevňování, max 180 days back):
+     *    Lowest price in 30 days prior to the first discount in the series.
+     * 3. Price moved up OR discount older than 180 days (tržní korekce):
+     *    Common price (modus / most frequent price over last 90 days).
      */
-    public Double getEffectiveReferencePrice() {
-        if (commonPrice != null && commonPrice > 0) {
-            return commonPrice;
-        }
-        return calculate30DayReferencePrice(currentPricePoints, currentPrice);
-    }
-
-    /**
-     * Returns the real discount percentage calculated against the 30-day lowest price
-     * before the current discount period.
-     */
-    public Double getEffectiveRealDiscount() {
-        if (realDiscount != null && realDiscount > 0) {
-            return realDiscount;
-        }
-        Double ref = getEffectiveReferencePrice();
-        if (ref != null && currentPrice != null && ref > currentPrice) {
-            return Math.round(((ref - currentPrice) / ref) * 1000.0) / 10.0;
-        }
-        return null;
-    }
-
-    private static Double calculate30DayReferencePrice(List<PricePoint> points, Double curPrice) {
-        if (points == null || points.size() < 2) return null;
-        if (curPrice == null) {
-            curPrice = points.get(points.size() - 1).price;
+    public DiscountCalculation calculateHlidacShopuDiscount() {
+        if (currentPricePoints == null || currentPricePoints.size() < 2) {
+            if (realDiscount != null && realDiscount > 0) {
+                return new DiscountCalculation(realDiscount, commonPrice, "z Hlídače shopů");
+            }
+            return new DiscountCalculation(0.0, currentPrice, "");
         }
 
-        // Find when the current price drop / level started
-        int n = points.size();
+        long now = System.currentTimeMillis();
+        double curPrice = (currentPrice != null) ? currentPrice : currentPricePoints.get(currentPricePoints.size() - 1).price;
+
+        int n = currentPricePoints.size();
         int idx = n - 1;
-        while (idx >= 0 && Math.abs(points.get(idx).price - curPrice) < 0.01) {
+        while (idx >= 0 && Math.abs(currentPricePoints.get(idx).price - curPrice) < 0.01) {
             idx--;
         }
 
         if (idx < 0) {
-            // Price has always been constant
-            return null;
+            // Price was always identical
+            return new DiscountCalculation(0.0, curPrice, "");
         }
 
-        // Progressive discounting: if the discount was introduced in multiple steps,
-        // walk back through consecutive decreases to find when the discounting campaign began
-        while (idx > 0 && points.get(idx).price < points.get(idx - 1).price) {
-            idx--;
+        // Check if price moved up to reach curPrice
+        boolean priceMovedUp = currentPricePoints.get(idx).price < curPrice;
+
+        // Souvislé vícenásobné zlevňování (max 180 dní zpět)
+        long maxDiscountWindow = 180L * 24 * 60 * 60 * 1000L;
+        int firstDropIdx = idx;
+        while (firstDropIdx > 0
+                && currentPricePoints.get(firstDropIdx - 1).price > currentPricePoints.get(firstDropIdx).price
+                && (now - currentPricePoints.get(firstDropIdx).timestamp) <= maxDiscountWindow) {
+            firstDropIdx--;
         }
 
-        // Timestamp of when price first dropped below standard level
-        long changeTimestamp = points.get(idx + 1).timestamp;
-        long thirtyDaysBefore = changeTimestamp - (30L * 24 * 60 * 60 * 1000L);
+        long discountStart = currentPricePoints.get(firstDropIdx + 1).timestamp;
+        long discountAge = now - discountStart;
 
-        double minBefore = Double.MAX_VALUE;
-        boolean found = false;
-
-        for (int i = idx; i >= 0; i--) {
-            PricePoint pt = points.get(i);
-            if (pt.price < minBefore) {
-                minBefore = pt.price;
+        if (!priceMovedUp && discountAge <= maxDiscountWindow) {
+            // Metodika 1 + 2: Nejnižší cena za 30 dní před začátkem slevové akce
+            long thirtyDaysBefore = discountStart - (30L * 24 * 60 * 60 * 1000L);
+            double minBefore = Double.MAX_VALUE;
+            for (int i = firstDropIdx; i >= 0; i--) {
+                PricePoint pt = currentPricePoints.get(i);
+                if (pt.price < minBefore) {
+                    minBefore = pt.price;
+                }
+                if (pt.timestamp < thirtyDaysBefore) {
+                    break;
+                }
             }
-            found = true;
-            if (pt.timestamp < thirtyDaysBefore) {
-                // Included the price that was active when entering the 30-day window
-                break;
+
+            if (minBefore != Double.MAX_VALUE && minBefore > curPrice) {
+                double discount = Math.round(((minBefore - curPrice) / minBefore) * 1000.0) / 10.0;
+                return new DiscountCalculation(discount, minBefore, "podle nejnižší ceny za 30 dní před slevou");
+            } else {
+                return new DiscountCalculation(0.0, (minBefore != Double.MAX_VALUE ? minBefore : curPrice), "podle nejnižší ceny za 30 dní před slevou");
+            }
+        } else {
+            // Metodika 3: Tržní korekce (sleva starší 180 dní nebo pohyb ceny nahoru)
+            // Běžná cena = cena, za kterou se zboží prodávalo nejčastěji za posledních 90 dní
+            long ninetyDaysAgo = now - (90L * 24 * 60 * 60 * 1000L);
+            java.util.Map<Double, Long> priceDurations = new java.util.HashMap<Double, Long>();
+            long lastTime = now;
+
+            for (int i = n - 1; i >= 0; i--) {
+                PricePoint pt = currentPricePoints.get(i);
+                long segStart = Math.max(pt.timestamp, ninetyDaysAgo);
+                long duration = lastTime - segStart;
+                if (duration > 0) {
+                    Long d = priceDurations.get(pt.price);
+                    priceDurations.put(pt.price, (d != null ? d : 0L) + duration);
+                }
+                lastTime = segStart;
+                if (pt.timestamp <= ninetyDaysAgo) {
+                    break;
+                }
+            }
+
+            double commonPriceCalc = curPrice;
+            long maxDur = -1;
+            for (java.util.Map.Entry<Double, Long> entry : priceDurations.entrySet()) {
+                if (entry.getValue() > maxDur) {
+                    maxDur = entry.getValue();
+                    commonPriceCalc = entry.getKey();
+                }
+            }
+
+            if (commonPrice != null && commonPrice > 0) {
+                commonPriceCalc = commonPrice;
+            }
+
+            if (commonPriceCalc > curPrice) {
+                double discount = Math.round(((commonPriceCalc - curPrice) / commonPriceCalc) * 1000.0) / 10.0;
+                return new DiscountCalculation(discount, commonPriceCalc, "podle běžné ceny za posledních 90 dní");
+            } else {
+                return new DiscountCalculation(0.0, commonPriceCalc, "podle běžné ceny za posledních 90 dní");
             }
         }
+    }
 
-        return (found && minBefore != Double.MAX_VALUE) ? minBefore : null;
+    public Double getEffectiveReferencePrice() {
+        DiscountCalculation calc = calculateHlidacShopuDiscount();
+        return calc != null ? calc.referencePrice : commonPrice;
+    }
+
+    public Double getEffectiveRealDiscount() {
+        DiscountCalculation calc = calculateHlidacShopuDiscount();
+        return calc != null ? calc.realDiscountPercent : realDiscount;
     }
 }

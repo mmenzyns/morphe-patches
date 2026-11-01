@@ -36,18 +36,20 @@ public class PriceHistoryChartView extends View {
     private PriceHistoryData data;
     private String commodityId;
     private boolean isCollapsed = false;
+    private boolean isDismissed = false;
 
     // Paints
     private Paint cardBgPaint;
     private Paint cardBorderPaint;
     private Paint gridLinePaint;
+    private Paint titlePaint;
     private Paint subtitlePaint;
     private Paint labelPaint;
+    private Paint discountLabelPaint;
+    private Paint discountValuePaint;
     private Paint currentCurvePaint;
     private Paint currentAreaPaint;
     private Paint originalCurvePaint;
-    private Paint badgeBgPaint;
-    private Paint badgeTextPaint;
     private Paint toggleTextPaint;
 
     private Path currentCurvePath = new Path();
@@ -92,17 +94,22 @@ public class PriceHistoryChartView extends View {
         gridLinePaint.setStyle(Paint.Style.STROKE);
         gridLinePaint.setStrokeWidth(dpToPx(1f));
 
+        titlePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        titlePaint.setTextSize(dpToPx(12.5f));
+        titlePaint.setFakeBoldText(true);
+
         subtitlePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        subtitlePaint.setTextSize(dpToPx(10.5f));
+        subtitlePaint.setTextSize(dpToPx(10f));
 
         labelPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         labelPaint.setTextSize(dpToPx(9.5f));
 
-        badgeBgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        badgeTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        badgeTextPaint.setTextSize(dpToPx(9.5f));
-        badgeTextPaint.setFakeBoldText(true);
-        badgeTextPaint.setColor(Color.WHITE);
+        discountLabelPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        discountLabelPaint.setTextSize(dpToPx(12f));
+
+        discountValuePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        discountValuePaint.setTextSize(dpToPx(13.5f));
+        discountValuePaint.setFakeBoldText(true);
 
         toggleTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         toggleTextPaint.setTextSize(dpToPx(11f));
@@ -111,7 +118,7 @@ public class PriceHistoryChartView extends View {
         currentCurvePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         currentCurvePaint.setStyle(Paint.Style.STROKE);
         currentCurvePaint.setStrokeWidth(dpToPx(2.5f));
-        currentCurvePaint.setColor(Color.parseColor("#00A651")); // Alza/Hlídač green
+        currentCurvePaint.setColor(Color.parseColor("#00A651")); // Hlídač shopů green
 
         currentAreaPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         currentAreaPaint.setStyle(Paint.Style.FILL);
@@ -157,6 +164,10 @@ public class PriceHistoryChartView extends View {
         return isCollapsed;
     }
 
+    public boolean isDismissed() {
+        return isDismissed;
+    }
+
     @Override
     public boolean onTouchEvent(MotionEvent event) {
         if (event.getAction() == MotionEvent.ACTION_UP) {
@@ -165,22 +176,23 @@ public class PriceHistoryChartView extends View {
             int width = getWidth();
 
             // 1. Close button "✕" in top-right area (last 44dp)
-            if (x >= width - dpToPx(44f) && y <= dpToPx(44f)) {
+            if (x >= width - dpToPx(44f) && y <= dpToPx(40f)) {
+                isDismissed = true;
                 setVisibility(View.GONE);
                 return true;
             }
 
             // 2. Toggle button area or header when collapsed
             if (isCollapsed) {
-                // Tapping anywhere on the collapsed bar expands it
+                // Tapping collapsed bar expands it
                 isCollapsed = false;
                 requestLayout();
                 invalidate();
                 return true;
             } else {
                 // When expanded:
-                // Check if touch is on top header (toggle or collapse)
-                if (y <= dpToPx(42f)) {
+                // Check if touch is on top header
+                if (y <= dpToPx(40f)) {
                     // Check toggle button area [width - 90dp .. width - 44dp]
                     if (x >= width - dpToPx(90f)) {
                         isCollapsed = true;
@@ -188,11 +200,10 @@ public class PriceHistoryChartView extends View {
                         invalidate();
                         return true;
                     }
-                    // Tapping header opens web or toggles
                     openHlidacWeb();
                     return true;
                 }
-                // Tapping chart opens web
+                // Tapping chart area opens web
                 openHlidacWeb();
                 return true;
             }
@@ -214,7 +225,7 @@ public class PriceHistoryChartView extends View {
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         int width = MeasureSpec.getSize(widthMeasureSpec);
-        int targetHeight = isCollapsed ? (int) dpToPx(40f) : (int) dpToPx(195f);
+        int targetHeight = isCollapsed ? (int) dpToPx(38f) : (int) dpToPx(195f);
         setMeasuredDimension(width, targetHeight);
     }
 
@@ -234,6 +245,7 @@ public class PriceHistoryChartView extends View {
         // Theme colors
         int bgColor = dark ? Color.parseColor("#181824") : Color.parseColor("#FFFFFF");
         int borderColor = dark ? Color.parseColor("#2E2E3E") : Color.parseColor("#E5E7EB");
+        int textNormalColor = dark ? Color.parseColor("#E5E7EB") : Color.parseColor("#1F2937");
         int subtitleColor = dark ? Color.parseColor("#9CA3AF") : Color.parseColor("#6B7280");
         int gridColor = dark ? Color.parseColor("#252538") : Color.parseColor("#F3F4F6");
         int labelColor = dark ? Color.parseColor("#9CA3AF") : Color.parseColor("#6B7280");
@@ -242,8 +254,10 @@ public class PriceHistoryChartView extends View {
         cardBgPaint.setColor(bgColor);
         cardBorderPaint.setColor(borderColor);
         gridLinePaint.setColor(gridColor);
+        titlePaint.setColor(textNormalColor);
         subtitlePaint.setColor(subtitleColor);
         labelPaint.setColor(labelColor);
+        discountLabelPaint.setColor(textNormalColor);
         toggleTextPaint.setColor(toggleColor);
 
         // Draw card background & border
@@ -262,42 +276,32 @@ public class PriceHistoryChartView extends View {
         float midY = height / 2f;
 
         // 1. Hlídač shopů Logo
-        float logoHeight = dpToPx(15f);
+        float logoHeight = dpToPx(14f);
         float logoLeft = paddingPx + dpToPx(4f);
         float logoTop = midY - (logoHeight / 2f);
         HlidacLogo.draw(canvas, logoLeft, logoTop, logoHeight, dark);
 
-        float curX = logoLeft + HlidacLogo.getScaledWidth(logoHeight) + dpToPx(8f);
+        float curX = logoLeft + HlidacLogo.getScaledWidth(logoHeight) + dpToPx(10f);
 
-        // 2. Real discount badge (EU Omnibus 30d lowest price)
-        Double realDiscount = data != null ? data.getEffectiveRealDiscount() : null;
-        if (realDiscount != null && realDiscount > 0) {
-            String badgeText = "-" + Math.round(realDiscount) + " %";
-            float badgeTextWidth = badgeTextPaint.measureText(badgeText);
-            float badgeLeft = curX;
-            float badgeTop = midY - dpToPx(8.5f);
-            float badgeRight = badgeLeft + badgeTextWidth + dpToPx(10f);
-            float badgeBottom = midY + dpToPx(8.5f);
-
-            badgeBgPaint.setColor(Color.parseColor("#00A651"));
-            RectF badgeRect = new RectF(badgeLeft, badgeTop, badgeRight, badgeBottom);
-            canvas.drawRoundRect(badgeRect, dpToPx(4f), dpToPx(4f), badgeBgPaint);
-            canvas.drawText(badgeText, badgeLeft + dpToPx(5f), midY + dpToPx(3.5f), badgeTextPaint);
-
-            curX = badgeRight + dpToPx(8f);
+        // 2. Skutečná sleva
+        if (data != null) {
+            PriceHistoryData.DiscountCalculation calc = data.calculateHlidacShopuDiscount();
+            String discountText;
+            if (calc != null && calc.realDiscountPercent > 0) {
+                discountValuePaint.setColor(Color.parseColor("#00A651")); // Green
+                discountText = "Skutečná sleva: -" + Math.round(calc.realDiscountPercent) + " %";
+            } else {
+                discountValuePaint.setColor(Color.parseColor("#9CA3AF")); // Neutral
+                discountText = "Skutečná sleva: 0 %";
+            }
+            canvas.drawText(discountText, curX, midY + dpToPx(4.5f), discountValuePaint);
         }
 
-        // 3. Current Price
-        if (data != null && data.getCurrentPrice() != null) {
-            String priceStr = priceFormat.format(data.getCurrentPrice()) + " Kč";
-            canvas.drawText(priceStr, curX, midY + dpToPx(4f), toggleTextPaint);
-        }
-
-        // 4. "▲ Graf" toggle hint
-        float expandX = width - paddingPx - dpToPx(48f);
+        // 3. "▲ Graf" toggle
+        float expandX = width - paddingPx - dpToPx(50f);
         canvas.drawText("▲ Graf", expandX, midY + dpToPx(4f), toggleTextPaint);
 
-        // 5. "✕" close button
+        // 4. "✕" close button
         float closeX = width - paddingPx - dpToPx(8f);
         canvas.drawText("✕", closeX, midY + dpToPx(4f), subtitlePaint);
     }
@@ -309,73 +313,67 @@ public class PriceHistoryChartView extends View {
         // 1. Hlídač shopů Vector SVG Logo
         float logoHeight = dpToPx(16f);
         HlidacLogo.draw(canvas, headerLeft, headerTop - dpToPx(12f), logoHeight, dark);
-        float logoWidth = HlidacLogo.getScaledWidth(logoHeight);
 
-        // 2. Real discount badge (EU Omnibus 30d lowest price)
-        Double realDiscount = data != null ? data.getEffectiveRealDiscount() : null;
-        if (realDiscount != null && realDiscount > 0) {
-            String badgeText = "-" + Math.round(realDiscount) + " % reálná sleva";
-            float badgeTextWidth = badgeTextPaint.measureText(badgeText);
-            float badgeLeft = headerLeft + logoWidth + dpToPx(8f);
-            float badgeTop = headerTop - dpToPx(12f);
-            float badgeRight = badgeLeft + badgeTextWidth + dpToPx(10f);
-            float badgeBottom = headerTop + dpToPx(4f);
-
-            badgeBgPaint.setColor(Color.parseColor("#00A651"));
-            RectF badgeRect = new RectF(badgeLeft, badgeTop, badgeRight, badgeBottom);
-            canvas.drawRoundRect(badgeRect, dpToPx(4f), dpToPx(4f), badgeBgPaint);
-            canvas.drawText(badgeText, badgeLeft + dpToPx(5f), headerTop - dpToPx(0.5f), badgeTextPaint);
-        } else if (data != null && data.getClaimedDiscount() != null && data.getClaimedDiscount() > 0) {
-            // Fake discount detected: claimed discount > 0 but real discount is 0!
-            String badgeText = "Reálná sleva: 0 %";
-            float badgeTextWidth = badgeTextPaint.measureText(badgeText);
-            float badgeLeft = headerLeft + logoWidth + dpToPx(8f);
-            float badgeTop = headerTop - dpToPx(12f);
-            float badgeRight = badgeLeft + badgeTextWidth + dpToPx(10f);
-            float badgeBottom = headerTop + dpToPx(4f);
-
-            badgeBgPaint.setColor(Color.parseColor("#F59E0B")); // Amber warning
-            RectF badgeRect = new RectF(badgeLeft, badgeTop, badgeRight, badgeBottom);
-            canvas.drawRoundRect(badgeRect, dpToPx(4f), dpToPx(4f), badgeBgPaint);
-            canvas.drawText(badgeText, badgeLeft + dpToPx(5f), headerTop - dpToPx(0.5f), badgeTextPaint);
-        }
-
-        // 3. Toggle button "▼ Sbalit"
+        // 2. Controls on the right: "▼ Sbalit" and "✕"
         float toggleX = width - paddingPx - dpToPx(60f);
         canvas.drawText("▼ Sbalit", toggleX, headerTop - dpToPx(0.5f), toggleTextPaint);
 
-        // 4. Close button "✕"
         float closeX = width - paddingPx - dpToPx(8f);
         canvas.drawText("✕", closeX, headerTop - dpToPx(0.5f), subtitlePaint);
 
-        // 5. Subtitle with prices (Current, Ref 30-day price, Min, Max)
+        // 3. SKUTEČNÁ SLEVA (Čistě naformátovaná, bez zbytečných čísel pod logem)
         if (state == State.LOADED && data != null) {
-            StringBuilder sb = new StringBuilder();
-            if (data.getCurrentPrice() != null) {
-                sb.append("Aktuální: ").append(priceFormat.format(data.getCurrentPrice())).append(" Kč");
+            PriceHistoryData.DiscountCalculation calc = data.calculateHlidacShopuDiscount();
+
+            float discountRowY = headerTop + dpToPx(16f);
+
+            // "Skutečná sleva: "
+            canvas.drawText("Skutečná sleva: ", headerLeft, discountRowY, discountLabelPaint);
+            float labelWidth = discountLabelPaint.measureText("Skutečná sleva: ");
+
+            // Value: "-XX %" or "0 %"
+            String valStr;
+            if (calc != null && calc.realDiscountPercent > 0) {
+                discountValuePaint.setColor(Color.parseColor("#00A651")); // Green
+                valStr = "-" + Math.round(calc.realDiscountPercent) + " %";
+            } else {
+                boolean fakeDiscount = data.getClaimedDiscount() != null && data.getClaimedDiscount() > 0;
+                discountValuePaint.setColor(fakeDiscount ? Color.parseColor("#F59E0B") : Color.parseColor("#9CA3AF"));
+                valStr = "0 %";
+            }
+            canvas.drawText(valStr, headerLeft + labelWidth, discountRowY, discountValuePaint);
+            float valWidth = discountValuePaint.measureText(valStr);
+
+            // Subtitle note / context (e.g. "Alza uvádí -35 % • podle nejnižší ceny za 30 dní před slevou")
+            StringBuilder noteSb = new StringBuilder();
+            if (data.getClaimedDiscount() != null && data.getClaimedDiscount() > 0) {
+                noteSb.append("Alza uvádí -").append(Math.round(data.getClaimedDiscount())).append(" %");
+                if (calc != null && calc.realDiscountPercent <= 0) {
+                    noteSb.append(" (klamavá)");
+                }
             }
 
-            Double refPrice = data.getEffectiveReferencePrice();
-            if (refPrice != null && refPrice > 0) {
-                if (sb.length() > 0) sb.append("  |  ");
-                sb.append("Ref. 30 dní: ").append(priceFormat.format(refPrice)).append(" Kč");
+            if (calc != null && calc.methodologyNote != null && !calc.methodologyNote.isEmpty()) {
+                if (noteSb.length() > 0) {
+                    noteSb.append("  •  ");
+                }
+                noteSb.append(calc.methodologyNote);
             }
 
-            if (data.getMinPrice() != null) {
-                if (sb.length() > 0) sb.append("  |  ");
-                sb.append("Min: ").append(priceFormat.format(data.getMinPrice())).append(" Kč");
+            if (noteSb.length() > 0) {
+                float noteX = headerLeft + labelWidth + valWidth + dpToPx(10f);
+                // If it fits on the same row, draw it there; otherwise right below
+                if (noteX + subtitlePaint.measureText(noteSb.toString()) < (width - paddingPx - dpToPx(8f))) {
+                    canvas.drawText(noteSb.toString(), noteX, discountRowY, subtitlePaint);
+                } else {
+                    canvas.drawText(noteSb.toString(), headerLeft, discountRowY + dpToPx(12f), subtitlePaint);
+                }
             }
-            if (data.getMaxPrice() != null) {
-                if (sb.length() > 0) sb.append("  |  ");
-                sb.append("Max: ").append(priceFormat.format(data.getMaxPrice())).append(" Kč");
-            }
-
-            canvas.drawText(sb.toString(), headerLeft, headerTop + dpToPx(15f), subtitlePaint);
         }
 
-        // 6. Draw Chart or States
+        // 4. Draw Chart or Loading/Empty/Error states
         float plotLeft = headerLeft;
-        float plotTop = headerTop + dpToPx(24f);
+        float plotTop = headerTop + dpToPx(28f);
         float plotRight = width - paddingPx - dpToPx(4f);
         float plotBottom = height - paddingPx - dpToPx(16f);
 
@@ -425,7 +423,6 @@ public class PriceHistoryChartView extends View {
         float maxLabelWidth = Math.max(labelPaint.measureText(topLabel), labelPaint.measureText(btmLabel));
         float yGutter = maxLabelWidth + dpToPx(8f);
 
-        // Chart curve ends at chartRight; Y labels are drawn in [chartRight + 6dp .. right]
         float chartRight = right - yGutter;
         if (chartRight <= left + dpToPx(60f)) {
             chartRight = right; // Fallback for very small screens

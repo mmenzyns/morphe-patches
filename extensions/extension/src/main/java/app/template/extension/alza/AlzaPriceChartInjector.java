@@ -1,6 +1,7 @@
 package app.template.extension.alza;
 
 import android.content.Context;
+import android.graphics.Rect;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
@@ -9,12 +10,16 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewParent;
+import android.view.ViewTreeObserver;
+import android.view.accessibility.AccessibilityNodeInfo;
+import android.view.accessibility.AccessibilityNodeProvider;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.Toast;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.List;
 
 public class AlzaPriceChartInjector {
     private static final String TAG = "MorpheAlza";
@@ -114,7 +119,7 @@ public class AlzaPriceChartInjector {
                 }
             });
 
-            FrameLayout rootLayout = new FrameLayout(context);
+            final FrameLayout rootLayout = new FrameLayout(context);
             rootLayout.setLayoutParams(new ViewGroup.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT
@@ -125,7 +130,7 @@ public class AlzaPriceChartInjector {
                     ViewGroup.LayoutParams.MATCH_PARENT
             ));
 
-            PriceHistoryChartView chartView = new PriceHistoryChartView(context);
+            final PriceHistoryChartView chartView = new PriceHistoryChartView(context);
             chartView.setTag(CHART_VIEW_TAG);
             chartView.setCommodityId(commodityId);
 
@@ -133,23 +138,21 @@ public class AlzaPriceChartInjector {
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT
             );
-            chartLp.gravity = Gravity.BOTTOM;
+            chartLp.gravity = Gravity.TOP;
 
-            // Position above the bottom buy panel (~76dp bottom margin)
-            int bottomMargin = (int) TypedValue.applyDimension(
-                    TypedValue.COMPLEX_UNIT_DIP,
-                    76,
-                    context.getResources().getDisplayMetrics()
-            );
             int sideMargin = (int) TypedValue.applyDimension(
                     TypedValue.COMPLEX_UNIT_DIP,
                     8,
                     context.getResources().getDisplayMetrics()
             );
-            chartLp.setMargins(sideMargin, 0, sideMargin, bottomMargin);
+            chartLp.setMargins(sideMargin, 0, sideMargin, 0);
 
+            // Initially set invisible until measured and aligned directly under price tags
+            chartView.setVisibility(View.INVISIBLE);
             rootLayout.addView(chartView, chartLp);
-            Log.i(TAG, "Injected PriceHistoryChartView for product " + commodityId);
+
+            setupInlineScrollSync(rootLayout, originalView, chartView);
+            Log.i(TAG, "Injected inline PriceHistoryChartView for product " + commodityId);
 
             fetchData(chartView, commodityId, null, productName);
             return rootLayout;
@@ -158,6 +161,92 @@ public class AlzaPriceChartInjector {
             Log.e(TAG, "Error in wrapFragmentView", t);
             return originalView;
         }
+    }
+
+    private static void setupInlineScrollSync(
+            final FrameLayout rootLayout,
+            final View originalView,
+            final PriceHistoryChartView chartView
+    ) {
+        final ViewTreeObserver vto = originalView.getViewTreeObserver();
+        vto.addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
+            private int lastY = Integer.MIN_VALUE;
+
+            @Override
+            public boolean onPreDraw() {
+                try {
+                    if (chartView.isDismissed()) {
+                        if (chartView.getVisibility() != View.GONE) {
+                            chartView.setVisibility(View.GONE);
+                        }
+                        return true;
+                    }
+
+                    int priceBottom = findPriceBottom(originalView, rootLayout);
+                    if (priceBottom != Integer.MIN_VALUE) {
+                        if (priceBottom != lastY) {
+                            lastY = priceBottom;
+                            chartView.setTranslationY(priceBottom);
+                        }
+
+                        int chartH = chartView.getHeight();
+                        int rootH = rootLayout.getHeight();
+                        if (chartH > 0 && rootH > 0) {
+                            if (priceBottom + chartH < 0 || priceBottom > rootH) {
+                                if (chartView.getVisibility() != View.INVISIBLE) {
+                                    chartView.setVisibility(View.INVISIBLE);
+                                }
+                            } else {
+                                if (chartView.getVisibility() != View.VISIBLE) {
+                                    chartView.setVisibility(View.VISIBLE);
+                                }
+                            }
+                        } else {
+                            if (chartView.getVisibility() != View.VISIBLE) {
+                                chartView.setVisibility(View.VISIBLE);
+                            }
+                        }
+                    } else if (lastY != Integer.MIN_VALUE) {
+                        // Keep last known position if transiently null
+                        chartView.setTranslationY(lastY);
+                    }
+                } catch (Throwable ignored) {}
+                return true;
+            }
+        });
+    }
+
+    private static int findPriceBottom(View originalView, View rootLayout) {
+        try {
+            AccessibilityNodeProvider provider = originalView.getAccessibilityNodeProvider();
+            if (provider != null) {
+                String[] keywords = new String[]{"bez DPH", "Garance nejlepší", "splát", "DPH", "Kč"};
+                for (String kw : keywords) {
+                    List<AccessibilityNodeInfo> nodes = provider.findAccessibilityNodeInfosByText(
+                            kw,
+                            AccessibilityNodeProvider.HOST_VIEW_ID
+                    );
+                    if (nodes != null && !nodes.isEmpty()) {
+                        AccessibilityNodeInfo node = nodes.get(0);
+                        Rect bounds = new Rect();
+                        node.getBoundsInScreen(bounds);
+
+                        int[] rootLoc = new int[2];
+                        rootLayout.getLocationOnScreen(rootLoc);
+
+                        int spacing = (int) TypedValue.applyDimension(
+                                TypedValue.COMPLEX_UNIT_DIP,
+                                6,
+                                originalView.getResources().getDisplayMetrics()
+                        );
+
+                        return bounds.bottom - rootLoc[1] + spacing;
+                    }
+                }
+            }
+        } catch (Throwable ignored) {}
+
+        return Integer.MIN_VALUE;
     }
 
     private static Object findGodFragment(Object obj) {
