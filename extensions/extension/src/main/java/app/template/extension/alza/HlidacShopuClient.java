@@ -88,7 +88,7 @@ public class HlidacShopuClient {
                     }
 
                     String apiUrl = API_BASE_URL + URLEncoder.encode(targetUrl, "UTF-8");
-                    Log.d(TAG, "Requesting Hlídač shopů: " + apiUrl);
+                    Log.i(TAG, "Requesting Hlídač shopů: " + apiUrl);
 
                     URL url = new URL(apiUrl);
                     HttpURLConnection conn = (HttpURLConnection) url.openConnection();
@@ -96,9 +96,10 @@ public class HlidacShopuClient {
                     conn.setConnectTimeout(TIMEOUT_MS);
                     conn.setReadTimeout(TIMEOUT_MS);
                     conn.setRequestProperty("Accept", "application/json");
-                    conn.setRequestProperty("User-Agent", "MorpheAlza/1.0 (Android)");
+                    conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
 
                     int responseCode = conn.getResponseCode();
+                    Log.i(TAG, "Hlídač shopů HTTP response code: " + responseCode);
                     if (responseCode != HttpURLConnection.HTTP_OK) {
                         throw new Exception("HTTP error code: " + responseCode);
                     }

@@ -1,19 +1,274 @@
 package app.template.extension.alza;
 
 import android.content.Context;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.util.TypedValue;
+import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewParent;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.Toast;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 
 public class AlzaPriceChartInjector {
     private static final String TAG = "MorpheAlza";
     public static final String CHART_VIEW_TAG = "MORPHE_HLIDAC_CHART";
+
+    // Captured synchronously at GodFragment.onCreateView entry (index 0)
+    private static final ThreadLocal<Object> currentFragment = new ThreadLocal<Object>();
+
+    public static void onFragmentCreateViewStart(Object fragment) {
+        try {
+            if (fragment != null) {
+                Log.i(TAG, "onFragmentCreateViewStart: captured " + fragment.getClass().getName());
+                currentFragment.set(fragment);
+            }
+        } catch (Throwable t) {
+            Log.e(TAG, "Error in onFragmentCreateViewStart", t);
+        }
+    }
+
+    public static View wrapFragmentView(View originalView, Object maybeFragment) {
+        if (originalView == null) return null;
+
+        try {
+            Object fragment = currentFragment.get();
+            currentFragment.remove();
+
+            if (fragment == null) {
+                fragment = maybeFragment;
+            }
+
+            Log.i(TAG, "wrapFragmentView: fragment=" + (fragment != null ? fragment.getClass().getName() : "null"));
+
+            // Resolve GodFragment even if wrapped in ComposableLambda / oed
+            Object godFragment = findGodFragment(fragment);
+            if (godFragment == null && maybeFragment != null) {
+                godFragment = findGodFragment(maybeFragment);
+            }
+
+            if (godFragment == null) {
+                Log.w(TAG, "Could not find GodFragment instance");
+                return originalView;
+            }
+
+            Log.i(TAG, "Found GodFragment: " + godFragment.getClass().getName());
+
+            // Extract destination from GodFragment via U() method reflection
+            Method methodU = godFragment.getClass().getMethod("U");
+            Object destination = methodU.invoke(godFragment);
+            if (destination == null) {
+                Log.d(TAG, "GodFragment U() returned null (not a destination fragment yet)");
+                return originalView;
+            }
+
+            String destClass = destination.getClass().getName();
+            String destStr = destination.toString();
+            Log.i(TAG, "Destination: " + destClass + ", toString: " + destStr);
+
+            boolean isProductDetail = destClass.contains("i3m")
+                    || destClass.toLowerCase().contains("productdetail")
+                    || destStr.contains("ProductDetail")
+                    || destStr.contains("cz.alza.base.lib.product.detail");
+
+            if (!isProductDetail) {
+                // Also check if any field holds ProductDetailParams
+                Object testParams = extractProductParams(destination);
+                if (testParams != null) {
+                    isProductDetail = true;
+                }
+            }
+
+            if (!isProductDetail) {
+                Log.d(TAG, "Not a product detail screen, skipping injection");
+                return originalView;
+            }
+
+            Object params = extractProductParams(destination);
+            String commodityId = extractCommodityId(params);
+            String productName = extractProductName(params);
+
+            Log.i(TAG, "Extracted product: id=" + commodityId + ", name=" + productName);
+
+            if (commodityId == null || commodityId.isEmpty() || commodityId.equals("0")) {
+                Log.w(TAG, "Could not extract valid commodityId from destination params");
+                return originalView;
+            }
+
+            final Context context = originalView.getContext();
+
+            // Notify user visually
+            new Handler(Looper.getMainLooper()).post(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        Toast.makeText(context, "Hlídač shopů: Načítám historii cen...", Toast.LENGTH_SHORT).show();
+                    } catch (Throwable ignored) {}
+                }
+            });
+
+            FrameLayout rootLayout = new FrameLayout(context);
+            rootLayout.setLayoutParams(new ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+            ));
+
+            rootLayout.addView(originalView, new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+            ));
+
+            PriceHistoryChartView chartView = new PriceHistoryChartView(context);
+            chartView.setTag(CHART_VIEW_TAG);
+            chartView.setCommodityId(commodityId);
+
+            FrameLayout.LayoutParams chartLp = new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+            );
+            chartLp.gravity = Gravity.BOTTOM;
+
+            // Position above the bottom buy panel (~76dp bottom margin)
+            int bottomMargin = (int) TypedValue.applyDimension(
+                    TypedValue.COMPLEX_UNIT_DIP,
+                    76,
+                    context.getResources().getDisplayMetrics()
+            );
+            int sideMargin = (int) TypedValue.applyDimension(
+                    TypedValue.COMPLEX_UNIT_DIP,
+                    8,
+                    context.getResources().getDisplayMetrics()
+            );
+            chartLp.setMargins(sideMargin, 0, sideMargin, bottomMargin);
+
+            rootLayout.addView(chartView, chartLp);
+            Log.i(TAG, "Injected PriceHistoryChartView for product " + commodityId);
+
+            fetchData(chartView, commodityId, null, productName);
+            return rootLayout;
+
+        } catch (Throwable t) {
+            Log.e(TAG, "Error in wrapFragmentView", t);
+            return originalView;
+        }
+    }
+
+    private static Object findGodFragment(Object obj) {
+        if (obj == null) return null;
+        if (hasMethod(obj.getClass(), "U")) {
+            return obj;
+        }
+
+        // Check 1 level of fields
+        try {
+            for (Field f : obj.getClass().getDeclaredFields()) {
+                f.setAccessible(true);
+                Object val = f.get(obj);
+                if (val != null) {
+                    if (hasMethod(val.getClass(), "U")) {
+                        return val;
+                    }
+                    // Check 2nd level
+                    try {
+                        for (Field f2 : val.getClass().getDeclaredFields()) {
+                            f2.setAccessible(true);
+                            Object val2 = f2.get(val);
+                            if (val2 != null && hasMethod(val2.getClass(), "U")) {
+                                return val2;
+                            }
+                        }
+                    } catch (Throwable ignored) {}
+                }
+            }
+        } catch (Throwable ignored) {}
+        return null;
+    }
+
+    private static boolean hasMethod(Class<?> clazz, String name) {
+        try {
+            clazz.getMethod(name);
+            return true;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    private static Object extractProductParams(Object destination) {
+        if (destination == null) return null;
+        try {
+            Field fa = destination.getClass().getField("a");
+            Object val = fa.get(destination);
+            if (val != null) return val;
+        } catch (Throwable ignored) {}
+
+        for (Field f : destination.getClass().getDeclaredFields()) {
+            try {
+                f.setAccessible(true);
+                Object val = f.get(destination);
+                if (val != null && val.getClass().getName().contains("ProductDetailParams")) {
+                    return val;
+                }
+            } catch (Throwable ignored) {}
+        }
+
+        for (Method m : destination.getClass().getDeclaredMethods()) {
+            try {
+                if (m.getParameterTypes().length == 0 && m.getReturnType().getName().contains("ProductDetailParams")) {
+                    m.setAccessible(true);
+                    Object val = m.invoke(destination);
+                    if (val != null) return val;
+                }
+            } catch (Throwable ignored) {}
+        }
+
+        return null;
+    }
+
+    private static String extractCommodityId(Object params) {
+        if (params == null) return null;
+
+        try {
+            Method m = params.getClass().getMethod("getProductId");
+            Object res = m.invoke(params);
+            if (res instanceof Number && ((Number) res).intValue() > 0) {
+                return String.valueOf(((Number) res).intValue());
+            }
+        } catch (Throwable ignored) {}
+
+        for (Field f : params.getClass().getDeclaredFields()) {
+            try {
+                f.setAccessible(true);
+                if (f.getName().equalsIgnoreCase("productId") || f.getName().equalsIgnoreCase("id")) {
+                    Object val = f.get(params);
+                    if (val instanceof Number && ((Number) val).intValue() > 0) {
+                        return String.valueOf(((Number) val).intValue());
+                    }
+                }
+            } catch (Throwable ignored) {}
+        }
+
+        return null;
+    }
+
+    private static String extractProductName(Object params) {
+        if (params == null) return null;
+        try {
+            Method m = params.getClass().getMethod("getProductInfo");
+            Object info = m.invoke(params);
+            if (info != null) {
+                Method mn = info.getClass().getMethod("getName");
+                Object nameObj = mn.invoke(info);
+                if (nameObj != null) return nameObj.toString();
+            }
+        } catch (Throwable ignored) {}
+        return null;
+    }
 
     public static void injectChart(
             final ViewGroup targetContainer,
@@ -28,7 +283,6 @@ public class AlzaPriceChartInjector {
         }
 
         try {
-            // Find existing view by tag in container or parent
             View existing = targetContainer.findViewWithTag(CHART_VIEW_TAG);
             if (existing == null && targetContainer.getParent() instanceof ViewGroup) {
                 existing = ((ViewGroup) targetContainer.getParent()).findViewWithTag(CHART_VIEW_TAG);
@@ -44,8 +298,6 @@ public class AlzaPriceChartInjector {
                 return;
             }
 
-            // If targetContainer is a ComposeView, it may disallow addView directly.
-            // Check if it's attached to parent ViewGroup or attach listener
             String className = targetContainer.getClass().getName();
             if (className.contains("ComposeView")) {
                 ViewParent parent = targetContainer.getParent();
@@ -69,7 +321,6 @@ public class AlzaPriceChartInjector {
                 }
             }
 
-            // Create new chart view
             Context context = targetContainer.getContext();
             final PriceHistoryChartView chartView = new PriceHistoryChartView(context);
             chartView.setTag(CHART_VIEW_TAG);
@@ -89,7 +340,7 @@ public class AlzaPriceChartInjector {
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.WRAP_CONTENT
                 );
-                flp.gravity = android.view.Gravity.BOTTOM;
+                flp.gravity = Gravity.BOTTOM;
                 lp = flp;
             } else {
                 lp = new ViewGroup.LayoutParams(
@@ -103,148 +354,6 @@ public class AlzaPriceChartInjector {
 
         } catch (Throwable t) {
             Log.e(TAG, "Error in injectChart", t);
-        }
-    }
-
-    public static void injectChart(
-            ViewGroup targetContainer,
-            int commodityId,
-            String ean,
-            String partNumber,
-            String productName
-    ) {
-        injectChart(targetContainer, String.valueOf(commodityId), ean, partNumber, productName);
-    }
-
-    public static View wrapFragmentView(View originalView, Object fragment) {
-        if (originalView == null || fragment == null) return originalView;
-        try {
-            Method methodU = fragment.getClass().getMethod("U");
-            Object destination = methodU.invoke(fragment);
-            if (destination == null) return originalView;
-
-            String destClass = destination.getClass().getName();
-            if (!destClass.contains("i3m") && !destClass.contains("ProductDetailDestination")) {
-                return originalView;
-            }
-
-            String commodityId = null;
-            String productName = null;
-            try {
-                java.lang.reflect.Field fieldParams = destination.getClass().getField("a");
-                Object params = fieldParams.get(destination);
-                if (params != null) {
-                    try {
-                        Method getProductId = params.getClass().getMethod("getProductId");
-                        Object idObj = getProductId.invoke(params);
-                        if (idObj instanceof Number) {
-                            commodityId = String.valueOf(((Number) idObj).intValue());
-                        }
-                    } catch (Throwable ignored) {}
-
-                    try {
-                        Method getProductInfo = params.getClass().getMethod("getProductInfo");
-                        Object info = getProductInfo.invoke(params);
-                        if (info != null) {
-                            Method getName = info.getClass().getMethod("getName");
-                            Object nameObj = getName.invoke(info);
-                            if (nameObj != null) {
-                                productName = nameObj.toString();
-                            }
-                        }
-                    } catch (Throwable ignored) {}
-                }
-            } catch (Throwable t) {
-                Log.e(TAG, "Error extracting product info in wrapFragmentView", t);
-            }
-
-            if (commodityId == null || commodityId.isEmpty() || commodityId.equals("0")) {
-                return originalView;
-            }
-
-            Context context = originalView.getContext();
-            FrameLayout rootLayout = new FrameLayout(context);
-            rootLayout.setLayoutParams(new ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT
-            ));
-
-            rootLayout.addView(originalView, new FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT
-            ));
-
-            PriceHistoryChartView chartView = new PriceHistoryChartView(context);
-            chartView.setTag(CHART_VIEW_TAG);
-            chartView.setCommodityId(commodityId);
-
-            FrameLayout.LayoutParams chartLp = new FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT
-            );
-            chartLp.gravity = android.view.Gravity.BOTTOM;
-            int margin = (int) TypedValue.applyDimension(
-                    TypedValue.COMPLEX_UNIT_DIP,
-                    8,
-                    context.getResources().getDisplayMetrics()
-            );
-            chartLp.setMargins(margin, margin, margin, margin);
-            rootLayout.addView(chartView, chartLp);
-
-            fetchData(chartView, commodityId, null, productName);
-            return rootLayout;
-        } catch (Throwable t) {
-            Log.e(TAG, "Error in wrapFragmentView", t);
-            return originalView;
-        }
-    }
-
-    public static void injectFromFragment(final ViewGroup targetContainer, final Object fragment) {
-        if (targetContainer == null || fragment == null) return;
-        try {
-            // Extract destination from GodFragment via U() method reflection
-            Method methodU = fragment.getClass().getMethod("U");
-            Object destination = methodU.invoke(fragment);
-            if (destination == null) return;
-
-            String destClass = destination.getClass().getName();
-            // Check if destination is product detail
-            if (destClass.contains("i3m") || destClass.contains("ProductDetailDestination")) {
-                // destination.a is ProductDetailParams
-                java.lang.reflect.Field fieldParams = destination.getClass().getField("a");
-                Object params = fieldParams.get(destination);
-
-                String commodityId = null;
-                String productName = null;
-
-                if (params != null) {
-                    try {
-                        Method getProductId = params.getClass().getMethod("getProductId");
-                        Object idObj = getProductId.invoke(params);
-                        if (idObj instanceof Number) {
-                            commodityId = String.valueOf(((Number) idObj).intValue());
-                        }
-                    } catch (Throwable ignored) {}
-
-                    try {
-                        Method getProductInfo = params.getClass().getMethod("getProductInfo");
-                        Object info = getProductInfo.invoke(params);
-                        if (info != null) {
-                            Method getName = info.getClass().getMethod("getName");
-                            Object nameObj = getName.invoke(info);
-                            if (nameObj != null) {
-                                productName = nameObj.toString();
-                            }
-                        }
-                    } catch (Throwable ignored) {}
-                }
-
-                if (commodityId != null && !commodityId.isEmpty() && !commodityId.equals("0")) {
-                    injectChart(targetContainer, commodityId, null, null, productName);
-                }
-            }
-        } catch (Throwable t) {
-            Log.e(TAG, "Error in injectFromFragment", t);
         }
     }
 
@@ -264,6 +373,7 @@ public class AlzaPriceChartInjector {
             final String identifier,
             final String productName
     ) {
+        Log.i(TAG, "fetchData: requesting data for commodityId=" + commodityId);
         HlidacShopuClient.getInstance().fetchPriceHistory(
                 commodityId,
                 null,
@@ -272,11 +382,13 @@ public class AlzaPriceChartInjector {
                 new HlidacShopuClient.Callback() {
                     @Override
                     public void onSuccess(PriceHistoryData data) {
+                        Log.i(TAG, "fetchData onSuccess: hasData=" + (data != null && data.hasData()));
                         chartView.setData(data);
                     }
 
                     @Override
                     public void onError(Throwable throwable) {
+                        Log.e(TAG, "fetchData onError: " + throwable.getMessage(), throwable);
                         chartView.setState(PriceHistoryChartView.State.ERROR);
                     }
                 }
