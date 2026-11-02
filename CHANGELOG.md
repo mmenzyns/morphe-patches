@@ -1,3 +1,9 @@
+## [1.4.1](https://github.com/mmenzyns/morphe-patches/compare/v1.4.0...v1.4.1) (2026-11-02)
+
+### 🐛 Bug Fixes
+
+* **alza:** remove claimed discount and 30-day methodology note subtitle ([d11ab97](https://github.com/mmenzyns/morphe-patches/commit/d11ab979b7085994fca17d4c254b954d9d119198))
+
 ## [1.4.0](https://github.com/mmenzyns/morphe-patches/compare/v1.3.7...v1.4.0) (2026-11-02)
 
 ### ✨ New Features
