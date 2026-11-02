@@ -51,6 +51,8 @@ public class PriceHistoryChartView extends View {
     private Paint currentAreaPaint;
     private Paint originalCurvePaint;
     private Paint toggleTextPaint;
+    private Paint dotBgPaint;
+    private Paint dotFgPaint;
 
     private Path currentCurvePath = new Path();
     private Path currentAreaPath = new Path();
@@ -140,6 +142,12 @@ public class PriceHistoryChartView extends View {
         originalCurvePaint.setStrokeWidth(dpToPx(1.5f));
         originalCurvePaint.setColor(Color.parseColor("#EF4444")); // Red strikethrough price
         originalCurvePaint.setPathEffect(new DashPathEffect(new float[]{dpToPx(4f), dpToPx(4f)}, 0));
+
+        dotBgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        dotBgPaint.setStyle(Paint.Style.FILL);
+
+        dotFgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        dotFgPaint.setStyle(Paint.Style.FILL);
     }
 
     public void setCommodityId(String commodityId) {
@@ -191,8 +199,15 @@ public class PriceHistoryChartView extends View {
     }
 
     @Override
+    public boolean performClick() {
+        super.performClick();
+        return true;
+    }
+
+    @Override
     public boolean onTouchEvent(MotionEvent event) {
         if (event.getAction() == MotionEvent.ACTION_UP) {
+            performClick();
             if (AlzaPriceChartInjector.isCompactMode()) {
                 openHlidacWeb();
                 return true;
@@ -251,13 +266,23 @@ public class PriceHistoryChartView extends View {
 
         if (compact) {
             int specSize = MeasureSpec.getSize(widthMeasureSpec);
-            int desiredWidth = (int) dpToPx(150f);
-            if (specSize > 0 && specSize < desiredWidth) {
-                width = specSize;
-            } else {
-                width = desiredWidth;
+            int screenWidth;
+            try {
+                screenWidth = getResources().getDisplayMetrics().widthPixels;
+            } catch (Throwable ignored) {
+                screenWidth = 1080;
             }
-            targetHeight = (int) dpToPx(48f);
+            float density = getResources().getDisplayMetrics().density;
+            if (density <= 0f) density = 1f;
+
+            // In FlowRow, the price column on the left and the 20dp gap take ~115-130dp.
+            // By deducting 130dp from the container width, the compact card utilizes
+            // available space on the right of the price without wrapping to the next line.
+            float specWidthDp = (specSize > 0 && specSize <= screenWidth) ? (specSize / density) : (screenWidth / density);
+            float targetWidthDp = Math.max(180f, Math.min(250f, specWidthDp - 130f));
+
+            width = (int) dpToPx(targetWidthDp);
+            targetHeight = (int) dpToPx(148f);
         } else {
             width = MeasureSpec.getSize(widthMeasureSpec);
             if (width <= 0) {
@@ -316,7 +341,8 @@ public class PriceHistoryChartView extends View {
         toggleTextPaint.setColor(toggleColor);
 
         // Draw card background & border
-        cardRect.set(paddingPx / 2, paddingPx / 2, width - (paddingPx / 2), height - (paddingPx / 2));
+        float inset = AlzaPriceChartInjector.isCompactMode() ? dpToPx(2f) : (paddingPx / 2f);
+        cardRect.set(inset, inset, width - inset, height - inset);
         canvas.drawRoundRect(cardRect, cornerRadiusPx, cornerRadiusPx, cardBgPaint);
         canvas.drawRoundRect(cardRect, cornerRadiusPx, cornerRadiusPx, cardBorderPaint);
 
@@ -331,108 +357,73 @@ public class PriceHistoryChartView extends View {
 
     private void drawCompactCard(Canvas canvas, int width, int height, boolean dark) {
         boolean sk = AlzaPriceChartInjector.isSlovak(getContext());
-        float padH = dpToPx(8f);
-        float padV = dpToPx(5f);
+        float padH = dpToPx(10f);
+        float padV = dpToPx(8f);
 
         // 1. Header line: Logo on left, Discount / Min Price on right
-        float logoHeight = dpToPx(11f);
+        float logoHeight = dpToPx(12.5f);
         float logoLeft = padH;
-        float logoTop = padV + dpToPx(1f);
+        float logoTop = padV + dpToPx(2f);
         HlidacLogo.draw(canvas, logoLeft, logoTop, logoHeight, dark);
 
         // Right side of header: Real discount percentage or min price
         if (data != null && data.hasData()) {
             PriceHistoryData.DiscountCalculation calc = data.calculateHlidacShopuDiscount();
             if (calc != null && calc.realDiscountPercent > 0) {
+                String prefix = sk ? "Skutočná zľava: " : "Skutečná sleva: ";
                 String badgeText = "-" + Math.round(calc.realDiscountPercent) + " %";
-                discountValuePaint.setTextSize(dpToPx(10.5f));
+
+                discountLabelPaint.setTextSize(dpToPx(10.5f));
+                discountValuePaint.setTextSize(dpToPx(11.5f));
                 discountValuePaint.setColor(Color.parseColor("#00A651"));
-                float textW = discountValuePaint.measureText(badgeText);
-                canvas.drawText(badgeText, width - padH - textW, padV + dpToPx(9.5f), discountValuePaint);
+
+                float valW = discountValuePaint.measureText(badgeText);
+                float prefW = discountLabelPaint.measureText(prefix);
+
+                float rightX = width - padH;
+                canvas.drawText(badgeText, rightX - valW, logoTop + dpToPx(10.5f), discountValuePaint);
+                canvas.drawText(prefix, rightX - valW - prefW, logoTop + dpToPx(10.5f), discountLabelPaint);
             } else if (data.getMinPrice() != null && data.getMinPrice() > 0) {
-                String minText = "Min: " + formatPrice(data.getMinPrice());
-                labelPaint.setTextSize(dpToPx(8.5f));
-                float textW = labelPaint.measureText(minText);
-                canvas.drawText(minText, width - padH - textW, padV + dpToPx(9f), labelPaint);
+                String prefix = sk ? "Skutočná zľava: " : "Skutečná sleva: ";
+                String badgeText = "0 %";
+
+                discountLabelPaint.setTextSize(dpToPx(10.5f));
+                discountValuePaint.setTextSize(dpToPx(11.5f));
+                discountValuePaint.setColor(Color.parseColor("#9CA3AF"));
+
+                float valW = discountValuePaint.measureText(badgeText);
+                float prefW = discountLabelPaint.measureText(prefix);
+
+                float rightX = width - padH;
+                canvas.drawText(badgeText, rightX - valW, logoTop + dpToPx(10.5f), discountValuePaint);
+                canvas.drawText(prefix, rightX - valW - prefW, logoTop + dpToPx(10.5f), discountLabelPaint);
             }
         }
 
-        // 2. Mini Sparkline Chart
+        // 2. Chart Plot Area
         float plotLeft = padH;
-        float plotTop = padV + dpToPx(13f);
+        float plotTop = padV + dpToPx(22f);
         float plotRight = width - padH;
-        float plotBottom = height - padV - dpToPx(2f);
+        float plotBottom = height - dpToPx(22f);
 
         switch (state) {
             case LOADING:
-                drawCenteredText(canvas, "...", plotLeft, plotTop, plotRight, plotBottom, subtitlePaint);
+                subtitlePaint.setTextSize(dpToPx(10f));
+                drawCenteredText(canvas, sk ? "Načítavam..." : "Načítám...", plotLeft, plotTop, plotRight, plotBottom, subtitlePaint);
                 break;
             case EMPTY:
             case UNSUPPORTED_COUNTRY:
+                labelPaint.setTextSize(dpToPx(9.5f));
+                drawCenteredText(canvas, sk ? "História cien nie je k dispozícii" : "Historie cen není k dispozici", plotLeft, plotTop, plotRight, plotBottom, labelPaint);
+                break;
             case ERROR:
-                labelPaint.setTextSize(dpToPx(8.5f));
-                drawCenteredText(canvas, sk ? "Bez histórie" : "Bez historie", plotLeft, plotTop, plotRight, plotBottom, labelPaint);
+                labelPaint.setTextSize(dpToPx(9.5f));
+                drawCenteredText(canvas, sk ? "Chyba načítania" : "Chyba načtení", plotLeft, plotTop, plotRight, plotBottom, labelPaint);
                 break;
             case LOADED:
-                drawCompactSparkline(canvas, plotLeft, plotTop, plotRight, plotBottom, dark);
+                drawChart(canvas, plotLeft, plotTop, plotRight, plotBottom, true);
                 break;
         }
-    }
-
-    private void drawCompactSparkline(Canvas canvas, float left, float top, float right, float bottom, boolean dark) {
-        if (data == null || !data.hasData()) return;
-
-        List<PriceHistoryData.PricePoint> points = data.getCurrentPricePoints();
-        int count = points.size();
-        if (count < 2) return;
-
-        double minPrice = data.getMinPrice() != null ? data.getMinPrice() : points.get(0).price;
-        double maxPrice = data.getMaxPrice() != null ? data.getMaxPrice() : points.get(0).price;
-        if (maxPrice <= minPrice) {
-            maxPrice = minPrice + 1.0;
-        }
-
-        currentCurvePath.reset();
-        currentAreaPath.reset();
-
-        float width = right - left;
-        float height = bottom - top;
-        float stepX = width / (count - 1f);
-
-        for (int i = 0; i < count; i++) {
-            float x = left + (i * stepX);
-            double price = points.get(i).price;
-            float norm = (float) ((price - minPrice) / (maxPrice - minPrice));
-            float y = bottom - (norm * height);
-
-            if (i == 0) {
-                currentCurvePath.moveTo(x, y);
-                currentAreaPath.moveTo(x, bottom);
-                currentAreaPath.lineTo(x, y);
-            } else {
-                currentCurvePath.lineTo(x, y);
-                currentAreaPath.lineTo(x, y);
-            }
-
-            if (i == count - 1) {
-                currentAreaPath.lineTo(x, bottom);
-                currentAreaPath.close();
-            }
-        }
-
-        int curveColor = Color.parseColor("#00A651");
-        int startGradColor = Color.argb(dark ? 65 : 45, Color.red(curveColor), Color.green(curveColor), Color.blue(curveColor));
-        int endGradColor = Color.argb(0, Color.red(curveColor), Color.green(curveColor), Color.blue(curveColor));
-
-        currentAreaPaint.setShader(new LinearGradient(
-                0, top, 0, bottom,
-                startGradColor, endGradColor,
-                Shader.TileMode.CLAMP
-        ));
-
-        canvas.drawPath(currentAreaPath, currentAreaPaint);
-        currentCurvePaint.setStrokeWidth(dpToPx(1.5f));
-        canvas.drawPath(currentCurvePath, currentCurvePaint);
     }
 
     private void drawCollapsedState(Canvas canvas, int width, int height, boolean dark) {
@@ -548,7 +539,7 @@ public class PriceHistoryChartView extends View {
 
         List<PriceHistoryData.PricePoint> points = data.getCurrentPricePoints();
         int count = points.size();
-        if (count < 2) return;
+        if (count == 0) return;
 
         double minPrice = data.getMinPrice() != null ? data.getMinPrice() : points.get(0).price;
         double maxPrice = data.getMaxPrice() != null ? data.getMaxPrice() : points.get(0).price;
@@ -569,6 +560,14 @@ public class PriceHistoryChartView extends View {
             chartRight = right;
         }
 
+        if (count < 2) {
+            float midY = (top + bottom) / 2f;
+            canvas.drawLine(left, midY, chartRight, midY, gridLinePaint);
+            String pStr = formatPrice(points.get(0).price);
+            canvas.drawText(pStr, right - labelPaint.measureText(pStr), midY + dpToPx(3f), labelPaint);
+            return;
+        }
+
         // Horizontal grid lines and labels
         int gridLines = compact ? 2 : 3;
         for (int i = 0; i < gridLines; i++) {
@@ -577,7 +576,15 @@ public class PriceHistoryChartView extends View {
 
             double priceVal = maxPrice - (maxPrice - minPrice) * i / (gridLines - 1f);
             String label = formatPrice(priceVal);
-            canvas.drawText(label, right - labelPaint.measureText(label), y + dpToPx(3f), labelPaint);
+            float labelY;
+            if (i == 0) {
+                labelY = y + dpToPx(8f);
+            } else if (i == gridLines - 1) {
+                labelY = y - dpToPx(2f);
+            } else {
+                labelY = y + dpToPx(3f);
+            }
+            canvas.drawText(label, right - labelPaint.measureText(label), labelY, labelPaint);
         }
 
         // Dates on X-axis
@@ -641,6 +648,16 @@ public class PriceHistoryChartView extends View {
         canvas.drawPath(currentAreaPath, currentAreaPaint);
         currentCurvePaint.setStrokeWidth(dpToPx(compact ? 2f : 2.5f));
         canvas.drawPath(currentCurvePath, currentCurvePaint);
+
+        // Draw endpoint circle for latest price
+        PriceHistoryData.PricePoint lastP = points.get(count - 1);
+        float lastX = chartRight;
+        float lastY = bottom - (float) ((lastP.price - minPrice) / (maxPrice - minPrice) * (bottom - top));
+
+        dotBgPaint.setColor(isDarkMode() ? Color.parseColor("#181824") : Color.WHITE);
+        canvas.drawCircle(lastX, lastY, dpToPx(3.5f), dotBgPaint);
+        dotFgPaint.setColor(curveColor);
+        canvas.drawCircle(lastX, lastY, dpToPx(2f), dotFgPaint);
 
         // Optional original price line (strikethrough)
         List<PriceHistoryData.PricePoint> origPoints = data.getOriginalPricePoints();
