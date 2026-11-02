@@ -1,3 +1,9 @@
+## [1.6.10](https://github.com/mmenzyns/morphe-patches/compare/v1.6.9...v1.6.10) (2026-11-02)
+
+### 🐛 Bug Fixes
+
+* **alza:** fix commodity id resolution and prevent infinite loading state ([f2aa04b](https://github.com/mmenzyns/morphe-patches/commit/f2aa04b2ba410b9e4515688d5fa328c5f48f4d31))
+
 ## [1.6.9](https://github.com/mmenzyns/morphe-patches/compare/v1.6.8...v1.6.9) (2026-11-02)
 
 ### 🐛 Bug Fixes
