@@ -1,3 +1,9 @@
+## [1.6.6](https://github.com/mmenzyns/morphe-patches/compare/v1.6.5...v1.6.6) (2026-11-02)
+
+### 🐛 Bug Fixes
+
+* **alza:** expand compact chart rightward and add left margin from price tag ([225f809](https://github.com/mmenzyns/morphe-patches/commit/225f809c348f691dba3df4d1b99b189e85218338))
+
 ## [1.6.5](https://github.com/mmenzyns/morphe-patches/compare/v1.6.4...v1.6.5) (2026-11-02)
 
 ### 🐛 Bug Fixes
