@@ -17,6 +17,10 @@ public class AlzaPriceChartInjector {
     private static volatile String sAndroidViewClass = null;
     private static volatile String sAndroidViewMethod = null;
     private static volatile String sFunction1Class = null;
+    private static volatile Method sAndroidViewResolvedMethod = null;
+    private static volatile Object sFactoryProxy = null;
+    private static volatile Object sUpdateProxy = null;
+    private static volatile ClassLoader sLastClassLoader = null;
 
     // Captured product info
     private static volatile String activeCommodityId = null;
@@ -130,99 +134,118 @@ public class AlzaPriceChartInjector {
                 } catch (Throwable ignored) {}
             }
 
-            Class<?> androidViewOwnerClass = null;
-            if (sAndroidViewClass != null && !sAndroidViewClass.isEmpty()) {
-                try {
-                    androidViewOwnerClass = cl.loadClass(sAndroidViewClass);
-                } catch (Throwable ignored) {}
-            }
+            if (sAndroidViewResolvedMethod == null || sLastClassLoader != cl) {
+                Class<?> androidViewOwnerClass = null;
+                if (sAndroidViewClass != null && !sAndroidViewClass.isEmpty()) {
+                    try {
+                        androidViewOwnerClass = cl.loadClass(sAndroidViewClass);
+                    } catch (Throwable ignored) {}
+                }
 
-            Method androidViewMethod = null;
-            if (androidViewOwnerClass != null) {
-                String methodName = sAndroidViewMethod != null ? sAndroidViewMethod : "a";
-                for (Method m : androidViewOwnerClass.getMethods()) {
-                    if (m.getName().equals(methodName) && m.getParameterTypes().length == 6) {
-                        androidViewMethod = m;
-                        if (vwcClass == null) {
-                            vwcClass = m.getParameterTypes()[0];
+                if (androidViewOwnerClass != null) {
+                    String methodName = sAndroidViewMethod != null ? sAndroidViewMethod : "a";
+                    for (Method m : androidViewOwnerClass.getMethods()) {
+                        if (m.getName().equals(methodName) && m.getParameterTypes().length == 6) {
+                            sAndroidViewResolvedMethod = m;
+                            if (vwcClass == null) {
+                                vwcClass = m.getParameterTypes()[0];
+                            }
+                            break;
                         }
-                        break;
                     }
                 }
             }
 
-            if (androidViewMethod == null || vwcClass == null) {
-                Log.e(TAG, "onPriceSectionCompose: AndroidView method or Function1 class not resolved");
+            Method androidViewMethod = sAndroidViewResolvedMethod;
+            if (androidViewMethod == null) {
+                Log.e(TAG, "onPriceSectionCompose: AndroidView method not resolved");
                 return;
             }
+            if (vwcClass == null) {
+                vwcClass = androidViewMethod.getParameterTypes()[0];
+            }
 
-            // Factory lambda for Compose AndroidView: (Context) -> View
-            Object factoryProxy = Proxy.newProxyInstance(
-                    cl,
-                    new Class<?>[]{vwcClass},
-                    new InvocationHandler() {
-                        @Override
-                        public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-                            if (method.getName().equals("invoke") && args != null && args.length == 1) {
-                                Context context = (Context) args[0];
-                                PriceHistoryChartView chartView = new PriceHistoryChartView(context);
-                                chartView.setTag(CHART_VIEW_TAG);
+            if (sFactoryProxy == null || sUpdateProxy == null || sLastClassLoader != cl) {
+                sLastClassLoader = cl;
+                sFactoryProxy = Proxy.newProxyInstance(
+                        cl,
+                        new Class<?>[]{vwcClass},
+                        new InvocationHandler() {
+                            @Override
+                            public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+                                String name = method.getName();
+                                if (name.equals("invoke") && args != null && args.length == 1 && args[0] instanceof Context) {
+                                    Context context = (Context) args[0];
+                                    PriceHistoryChartView chartView = new PriceHistoryChartView(context);
+                                    chartView.setTag(CHART_VIEW_TAG);
 
-                                if (activeCommodityId == null || activeCommodityId.isEmpty()) {
-                                    resolveProductFromGodFragment(lastGodFragment.get());
-                                }
-
-                                String commodityId = activeCommodityId;
-                                String productName = activeProductName;
-                                if (commodityId != null && !commodityId.isEmpty() && !commodityId.equals("0")) {
-                                    chartView.setCommodityId(commodityId);
-                                    fetchData(chartView, commodityId, null, productName);
-                                }
-                                Log.i(TAG, "Compose AndroidView factory: created native inline PriceHistoryChartView for " + commodityId);
-                                return chartView;
-                            }
-                            if (method.getName().equals("toString")) return "PriceHistoryChartFactoryProxy";
-                            if (method.getName().equals("hashCode")) return System.identityHashCode(proxy);
-                            if (method.getName().equals("equals")) return proxy == (args != null && args.length > 0 ? args[0] : null);
-                            return null;
-                        }
-                    }
-            );
-
-            // Update lambda for Compose AndroidView: (View) -> Unit
-            Object updateProxy = Proxy.newProxyInstance(
-                    cl,
-                    new Class<?>[]{vwcClass},
-                    new InvocationHandler() {
-                        @Override
-                        public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-                            if (method.getName().equals("invoke") && args != null && args.length == 1) {
-                                if (args[0] instanceof PriceHistoryChartView) {
-                                    PriceHistoryChartView chartView = (PriceHistoryChartView) args[0];
                                     if (activeCommodityId == null || activeCommodityId.isEmpty()) {
                                         resolveProductFromGodFragment(lastGodFragment.get());
                                     }
+
                                     String commodityId = activeCommodityId;
+                                    String productName = activeProductName;
                                     if (commodityId != null && !commodityId.isEmpty() && !commodityId.equals("0")) {
-                                        if (!commodityId.equals(chartView.getCommodityId())) {
-                                            chartView.setCommodityId(commodityId);
-                                            fetchData(chartView, commodityId, null, activeProductName);
-                                        } else if (chartView.getData() == null && chartView.getState() != PriceHistoryChartView.State.LOADING) {
-                                            fetchData(chartView, commodityId, null, activeProductName);
-                                        }
+                                        chartView.setCommodityId(commodityId);
+                                        fetchData(chartView, commodityId, null, productName);
                                     }
-                                    Log.i(TAG, "Compose AndroidView update: chartView for " + chartView.getCommodityId() + " (state=" + chartView.getState() + ")");
+                                    Log.i(TAG, "Compose AndroidView factory: created native inline PriceHistoryChartView for " + commodityId);
+                                    return chartView;
                                 }
+                                if (name.equals("toString")) return "PriceHistoryChartFactoryProxy";
+                                if (name.equals("hashCode")) return Integer.valueOf(System.identityHashCode(proxy));
+                                if (name.equals("equals")) {
+                                    return Boolean.valueOf(args != null && args.length > 0 && proxy == args[0]);
+                                }
+                                if (method.getReturnType().equals(boolean.class)) return Boolean.FALSE;
+                                if (method.getReturnType().equals(int.class)) return Integer.valueOf(0);
                                 return null;
                             }
-                            return null;
                         }
-                    }
-            );
+                );
+
+                sUpdateProxy = Proxy.newProxyInstance(
+                        cl,
+                        new Class<?>[]{vwcClass},
+                        new InvocationHandler() {
+                            @Override
+                            public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+                                String name = method.getName();
+                                if (name.equals("invoke") && args != null && args.length == 1) {
+                                    if (args[0] instanceof PriceHistoryChartView) {
+                                        PriceHistoryChartView chartView = (PriceHistoryChartView) args[0];
+                                        if (activeCommodityId == null || activeCommodityId.isEmpty()) {
+                                            resolveProductFromGodFragment(lastGodFragment.get());
+                                        }
+                                        String commodityId = activeCommodityId;
+                                        if (commodityId != null && !commodityId.isEmpty() && !commodityId.equals("0")) {
+                                            if (!commodityId.equals(chartView.getCommodityId())) {
+                                                chartView.setCommodityId(commodityId);
+                                                fetchData(chartView, commodityId, null, activeProductName);
+                                            } else if (chartView.getData() == null && chartView.getState() != PriceHistoryChartView.State.LOADING) {
+                                                fetchData(chartView, commodityId, null, activeProductName);
+                                            }
+                                        }
+                                        Log.i(TAG, "Compose AndroidView update: chartView for " + chartView.getCommodityId() + " (state=" + chartView.getState() + ")");
+                                    }
+                                    return null;
+                                }
+                                if (name.equals("toString")) return "PriceHistoryChartUpdateProxy";
+                                if (name.equals("hashCode")) return Integer.valueOf(System.identityHashCode(proxy));
+                                if (name.equals("equals")) {
+                                    return Boolean.valueOf(args != null && args.length > 0 && proxy == args[0]);
+                                }
+                                if (method.getReturnType().equals(boolean.class)) return Boolean.FALSE;
+                                if (method.getReturnType().equals(int.class)) return Integer.valueOf(0);
+                                return null;
+                            }
+                        }
+                );
+            }
 
             // Call AndroidView(factory, modifier=null, update=updateProxy, composer, changed=6, default=2)
             // default = 2 means bit 1 (2) is set -> use default Modifier; bit 2 (4) is 0 -> use updateProxy
-            androidViewMethod.invoke(null, factoryProxy, null, updateProxy, composer, 6, 2);
+            androidViewMethod.invoke(null, sFactoryProxy, null, sUpdateProxy, composer, 6, 2);
             Log.i(TAG, "onPriceSectionCompose: successfully emitted native inline AndroidView");
 
         } catch (Throwable t) {
