@@ -156,10 +156,10 @@ public class AlzaPriceChartInjector {
     }
 
     public static boolean isSlovak(Context context) {
-        if ("€".equals(sExplicitCurrency)) {
+        if ("€".equals(sExplicitCurrency) || "alza.sk".equalsIgnoreCase(sDetectedDomain)) {
             return true;
         }
-        if ("Kč".equals(sExplicitCurrency) || "Ft".equals(sExplicitCurrency)) {
+        if ("Kč".equals(sExplicitCurrency) || "alza.cz".equalsIgnoreCase(sDetectedDomain)) {
             return false;
         }
         return isSlovakLocale(context != null ? context : sAppContext);
@@ -236,29 +236,17 @@ public class AlzaPriceChartInjector {
     }
 
     public static String getDetectedDomain() {
-        if ("alza.sk".equalsIgnoreCase(sDetectedDomain) || "€".equals(sExplicitCurrency)) {
+        if ("alza.sk".equalsIgnoreCase(sDetectedDomain) || "€".equals(sExplicitCurrency) || isSlovak()) {
             return "alza.sk";
         }
-        if ("alza.hu".equalsIgnoreCase(sDetectedDomain) || "Ft".equals(sExplicitCurrency)) {
-            return "alza.hu";
-        }
-        if (isSlovak()) {
-            return "alza.sk";
-        }
-        return sDetectedDomain != null ? sDetectedDomain : "alza.cz";
+        return "alza.cz";
     }
 
     public static String getDetectedCurrency() {
-        if ("€".equals(sExplicitCurrency) || "alza.sk".equalsIgnoreCase(sDetectedDomain)) {
+        if ("€".equals(sExplicitCurrency) || "alza.sk".equalsIgnoreCase(sDetectedDomain) || isSlovak()) {
             return "€";
         }
-        if ("Ft".equals(sExplicitCurrency) || "alza.hu".equalsIgnoreCase(sDetectedDomain)) {
-            return "Ft";
-        }
-        if (isSlovak()) {
-            return "€";
-        }
-        return sDetectedCurrency != null ? sDetectedCurrency : "Kč";
+        return "Kč";
     }
 
     public static boolean isCountrySupported() {
@@ -313,12 +301,6 @@ public class AlzaPriceChartInjector {
                 sDetectedDomain = "alza.cz";
                 sIsCountrySupported = true;
                 return;
-            } else if (str.contains("Ft") || str.contains("HUF")) {
-                sExplicitCurrency = "Ft";
-                sDetectedCurrency = "Ft";
-                sDetectedDomain = "alza.hu";
-                sIsCountrySupported = false;
-                return;
             }
 
             Method mGetPrice = productPrices.getClass().getMethod("getPrice");
@@ -337,12 +319,6 @@ public class AlzaPriceChartInjector {
                     sDetectedDomain = "alza.cz";
                     sIsCountrySupported = true;
                     return;
-                } else if (pStr.contains("Ft") || pStr.contains("HUF")) {
-                    sExplicitCurrency = "Ft";
-                    sDetectedCurrency = "Ft";
-                    sDetectedDomain = "alza.hu";
-                    sIsCountrySupported = false;
-                    return;
                 }
 
                 Method mPrimary = priceObj.getClass().getMethod("getPrimaryPrice");
@@ -353,16 +329,13 @@ public class AlzaPriceChartInjector {
                     sDetectedCurrency = "€";
                     sDetectedDomain = "alza.sk";
                     sIsCountrySupported = true;
+                    return;
                 } else if (primaryStr.contains("Kč") || primaryStr.contains("Kc")) {
                     sExplicitCurrency = "Kč";
                     sDetectedCurrency = "Kč";
                     sDetectedDomain = "alza.cz";
                     sIsCountrySupported = true;
-                } else if (primaryStr.contains("Ft") || primaryStr.contains("HUF")) {
-                    sExplicitCurrency = "Ft";
-                    sDetectedCurrency = "Ft";
-                    sDetectedDomain = "alza.hu";
-                    sIsCountrySupported = false;
+                    return;
                 }
             }
         } catch (Throwable ignored) {}
@@ -424,16 +397,7 @@ public class AlzaPriceChartInjector {
                             sDetectedDomain = "alza.cz";
                             sDetectedCurrency = "Kč";
                             sIsCountrySupported = true;
-                        } else if (hrefStr.contains(".de") || hrefStr.contains("/de/")) {
-                            sDetectedDomain = "alza.de";
-                            sIsCountrySupported = false;
-                        } else if (hrefStr.contains(".at") || hrefStr.contains("/at/")) {
-                            sDetectedDomain = "alza.at";
-                            sIsCountrySupported = false;
-                        } else if (hrefStr.contains(".hu") || hrefStr.contains("/hu/")) {
-                            sExplicitCurrency = "Ft";
-                            sDetectedDomain = "alza.hu";
-                            sDetectedCurrency = "Ft";
+                        } else {
                             sIsCountrySupported = false;
                         }
                     }
