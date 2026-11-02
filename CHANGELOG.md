@@ -1,3 +1,9 @@
+## [1.3.5](https://github.com/mmenzyns/morphe-patches/compare/v1.3.4...v1.3.5) (2026-11-02)
+
+### 🐛 Bug Fixes
+
+* **alza:** Prevent chart disposal on recomposition by injecting after VAT branch merge ([86a2aa6](https://github.com/mmenzyns/morphe-patches/commit/86a2aa688811694b3df3f1e31df4d72302f30cf5))
+
 ## [1.3.4](https://github.com/mmenzyns/morphe-patches/compare/v1.3.3...v1.3.4) (2026-11-02)
 
 ### 🐛 Bug Fixes
