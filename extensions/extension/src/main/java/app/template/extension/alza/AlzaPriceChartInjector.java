@@ -68,6 +68,11 @@ public class AlzaPriceChartInjector {
         Log.i(TAG, "initComposeBindings: androidView=" + sAndroidViewClass + "." + sAndroidViewMethod + ", function1=" + sFunction1Class);
     }
 
+    public static void initComposeClass(String androidViewClass) {
+        sAndroidViewClass = androidViewClass;
+        Log.i(TAG, "initComposeClass: androidView=" + sAndroidViewClass);
+    }
+
     public static Context getApplicationContext() {
         if (sAppContext != null) return sAppContext;
         try {
