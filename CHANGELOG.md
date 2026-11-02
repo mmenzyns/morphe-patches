@@ -1,3 +1,9 @@
+## [1.6.2](https://github.com/mmenzyns/morphe-patches/compare/v1.6.1...v1.6.2) (2026-11-02)
+
+### 🐛 Bug Fixes
+
+* **alza:** remove all Hungary references and strictly support only CZ and SK ([28b73ff](https://github.com/mmenzyns/morphe-patches/commit/28b73ff16608192343211ce11c54254910ed3bd4))
+
 ## [1.6.1](https://github.com/mmenzyns/morphe-patches/compare/v1.6.0...v1.6.1) (2026-11-02)
 
 ### 🐛 Bug Fixes
