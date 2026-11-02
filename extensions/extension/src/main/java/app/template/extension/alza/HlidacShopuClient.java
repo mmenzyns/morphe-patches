@@ -67,7 +67,8 @@ public class HlidacShopuClient {
             return;
         }
 
-        final String cacheKey = (commodityId != null && !commodityId.isEmpty()) ? commodityId : fallbackUrl;
+        final String domain = AlzaPriceChartInjector.getDetectedDomain();
+        final String cacheKey = domain + ":" + ((commodityId != null && !commodityId.isEmpty()) ? commodityId : fallbackUrl);
         PriceHistoryData cachedData = cache.get(cacheKey);
         if (cachedData != null) {
             if (callback != null) {
@@ -84,7 +85,11 @@ public class HlidacShopuClient {
                     if (fallbackUrl != null && fallbackUrl.startsWith("http")) {
                         targetUrl = fallbackUrl;
                     } else {
-                        targetUrl = "https://www.alza.cz/a-d" + commodityId + ".htm";
+                        String activeDomain = domain;
+                        if (activeDomain == null || activeDomain.isEmpty()) {
+                            activeDomain = "alza.cz";
+                        }
+                        targetUrl = "https://www." + activeDomain + "/a-d" + commodityId + ".htm";
                     }
 
                     String apiUrl = API_BASE_URL + URLEncoder.encode(targetUrl, "UTF-8");
@@ -267,4 +272,3 @@ public class HlidacShopuClient {
         }
     }
 }
-

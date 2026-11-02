@@ -10,7 +10,7 @@ private const val EXTENSION_CLASS = "Lapp/template/extension/alza/AlzaPriceChart
 @Suppress("unused")
 val alzaPriceHistoryPatch = bytecodePatch(
     name = "Alza Hlídač shopů Price History",
-    description = "Displays inline price history chart from Hlídač shopů in product detail screen.",
+    description = "Displays inline price history chart from Hlídač shopů in product detail screen (CZ/SK) with Compact mode and Settings.",
     default = true
 ) {
     compatibleWith(COMPATIBILITY_ALZA)
@@ -49,9 +49,20 @@ val alzaPriceHistoryPatch = bytecodePatch(
         val androidViewMethod = AndroidViewFingerprint.method.name
         val function1Class = AndroidViewFingerprint.method.parameterTypes[0].toString().removePrefix("L").removeSuffix(";").replace("/", ".")
 
-        // 4. Hook PriceSectionContentFingerprint (f5m.invoke) - the FlowRow price section composable
-        // This injects the chart as the 3rd child of FlowRow (after both Price and Home Credit / installments)
-        // so Price and Home Credit remain side-by-side on Line 1, and the chart wraps to Line 2 underneath both.
+        // 4. Hook ProductPrices.getAlternativePrice to allow Compact Mode to eliminate HomeCredit / installments cleanly
+        val altPriceMethod = ProductPricesGetAlternativePriceFingerprint.method
+        altPriceMethod.addInstructions(
+            0,
+            """
+                invoke-static {p0}, $EXTENSION_CLASS->filterAlternativePrice(Ljava/lang/Object;)Ljava/lang/Object;
+                move-result-object v0
+                check-cast v0, Lcz/alza/base/lib/product/detail/model/general/data/AlternativePrice;
+                return-object v0
+            """
+        )
+
+        // 5. Hook PriceSectionContentFingerprint (f5m.invoke) - the FlowRow price section composable
+        // This injects the chart as the child of FlowRow after both branches of AlternativePrice
         val contentMethod = PriceSectionContentFingerprint.method
 
         // Pass discovered AndroidView bindings at method entry
@@ -100,6 +111,68 @@ val alzaPriceHistoryPatch = bytecodePatch(
                     invoke-static/range {p2 .. p2}, $EXTENSION_CLASS->onPriceSectionCompose(Ljava/lang/Object;)V
                 """
             )
+        }
+
+        // 6. Hook ThemeSettingsContentFingerprint (jsq.b) - inject MorpheSettingsCardView into Theme Settings screen
+        try {
+            val themeMethod = ThemeSettingsContentFingerprint.method
+            themeMethod.addInstructions(
+                0,
+                """
+                    const-string v0, "$androidViewClass"
+                    const-string v1, "$androidViewMethod"
+                    const-string v2, "$function1Class"
+                    invoke-static {v0, v1, v2}, $EXTENSION_CLASS->initComposeBindings(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+                """
+            )
+
+            val themeInstructions = themeMethod.implementation!!.instructions
+            val lastQIndex = themeInstructions.indexOfLast { instruction ->
+                val ref = (instruction as? ReferenceInstruction)?.reference?.toString() ?: ""
+                ref.contains(";->q(Z)V") || ref.contains("endNode")
+            }
+            if (lastQIndex != -1) {
+                // p2 is Composer in jsq.b(ThemeMode, Function1, Composer, Int)
+                themeMethod.addInstructions(
+                    lastQIndex,
+                    """
+                        invoke-static/range {p2 .. p2}, $EXTENSION_CLASS->onSettingsCompose(Ljava/lang/Object;)V
+                    """
+                )
+            }
+        } catch (ignored: Throwable) {
+            // Optional fallback
+        }
+
+        // 7. Hook SettingsAndSecurityContentFingerprint (noo.e) - inject MorpheSettingsCardView into Settings & Security screen
+        try {
+            val secMethod = SettingsAndSecurityContentFingerprint.method
+            secMethod.addInstructions(
+                0,
+                """
+                    const-string v0, "$androidViewClass"
+                    const-string v1, "$androidViewMethod"
+                    const-string v2, "$function1Class"
+                    invoke-static {v0, v1, v2}, $EXTENSION_CLASS->initComposeBindings(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+                """
+            )
+
+            val secInstructions = secMethod.implementation!!.instructions
+            val lastSecQIndex = secInstructions.indexOfLast { instruction ->
+                val ref = (instruction as? ReferenceInstruction)?.reference?.toString() ?: ""
+                ref.contains(";->q(Z)V") || ref.contains("endNode") || ref.contains("endReplaceableGroup")
+            }
+            if (lastSecQIndex != -1) {
+                // p13 is Composer in noo.e(..., Composer, Int)
+                secMethod.addInstructions(
+                    lastSecQIndex,
+                    """
+                        invoke-static/range {p13 .. p13}, $EXTENSION_CLASS->onSettingsCompose(Ljava/lang/Object;)V
+                    """
+                )
+            }
+        } catch (ignored: Throwable) {
+            // Optional fallback
         }
     }
 }

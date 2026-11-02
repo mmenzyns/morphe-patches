@@ -1,0 +1,215 @@
+package app.template.extension.alza;
+
+import android.content.Context;
+import android.content.res.ColorStateList;
+import android.content.res.Configuration;
+import android.graphics.Color;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
+import android.util.AttributeSet;
+import android.util.TypedValue;
+import android.view.Gravity;
+import android.view.View;
+import android.widget.CompoundButton;
+import android.widget.LinearLayout;
+import android.widget.Switch;
+import android.widget.TextView;
+import android.widget.Toast;
+
+/**
+ * Dedicated "Morphe" settings card view displayed inside Alza app settings
+ * and inside the MorpheSettingsDialog.
+ */
+public class MorpheSettingsCardView extends LinearLayout {
+
+    public MorpheSettingsCardView(Context context) {
+        super(context);
+        init(context);
+    }
+
+    public MorpheSettingsCardView(Context context, AttributeSet attrs) {
+        super(context, attrs);
+        init(context);
+    }
+
+    private void init(final Context context) {
+        setOrientation(LinearLayout.VERTICAL);
+
+        boolean dark = isDarkMode(context);
+
+        int bgColor = dark ? Color.parseColor("#181824") : Color.parseColor("#FFFFFF");
+        int borderColor = dark ? Color.parseColor("#2E2E3E") : Color.parseColor("#E5E7EB");
+        int textNormalColor = dark ? Color.parseColor("#F3F4F6") : Color.parseColor("#111827");
+        int textMutedColor = dark ? Color.parseColor("#9CA3AF") : Color.parseColor("#6B7280");
+        int brandGreen = Color.parseColor("#00A651");
+
+        // Card background with rounded corners and border
+        GradientDrawable cardBg = new GradientDrawable();
+        cardBg.setShape(GradientDrawable.RECTANGLE);
+        cardBg.setColor(bgColor);
+        cardBg.setCornerRadius(dpToPx(context, 12f));
+        cardBg.setStroke((int) dpToPx(context, 1f), borderColor);
+        setBackground(cardBg);
+
+        int pad16 = (int) dpToPx(context, 16f);
+        setPadding(pad16, pad16, pad16, pad16);
+
+        // LayoutParams with margins
+        LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        int marginH = (int) dpToPx(context, 12f);
+        int marginV = (int) dpToPx(context, 8f);
+        cardLp.setMargins(marginH, marginV, marginH, marginV);
+        setLayoutParams(cardLp);
+
+        // 1. Header: "Morphe – Rozšíření Alza" + "CZ / SK" badge
+        LinearLayout headerRow = new LinearLayout(context);
+        headerRow.setOrientation(LinearLayout.HORIZONTAL);
+        headerRow.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams headerLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        headerRow.setLayoutParams(headerLp);
+
+        TextView titleView = new TextView(context);
+        titleView.setText("Morphe – Hlídač shopů");
+        titleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f);
+        titleView.setTypeface(Typeface.DEFAULT_BOLD);
+        titleView.setTextColor(brandGreen);
+        LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f
+        );
+        headerRow.addView(titleView, titleLp);
+
+        // Market badge "CZ / SK"
+        TextView badgeView = new TextView(context);
+        badgeView.setText("CZ / SK");
+        badgeView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f);
+        badgeView.setTypeface(Typeface.DEFAULT_BOLD);
+        badgeView.setTextColor(brandGreen);
+        GradientDrawable badgeBg = new GradientDrawable();
+        badgeBg.setShape(GradientDrawable.RECTANGLE);
+        badgeBg.setColor(dark ? Color.parseColor("#1B3320") : Color.parseColor("#E8F5E9"));
+        badgeBg.setCornerRadius(dpToPx(context, 6f));
+        badgeBg.setStroke((int) dpToPx(context, 1f), Color.parseColor("#2E7D32"));
+        badgeView.setBackground(badgeBg);
+        int bPadH = (int) dpToPx(context, 8f);
+        int bPadV = (int) dpToPx(context, 3f);
+        badgeView.setPadding(bPadH, bPadV, bPadH, bPadV);
+        headerRow.addView(badgeView);
+
+        addView(headerRow);
+
+        // Divider
+        addDivider(context, borderColor, 12f);
+
+        // 2. Compact Mode Toggle Switch Row
+        LinearLayout switchRow = new LinearLayout(context);
+        switchRow.setOrientation(LinearLayout.HORIZONTAL);
+        switchRow.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams switchRowLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        switchRow.setLayoutParams(switchRowLp);
+
+        LinearLayout textCol = new LinearLayout(context);
+        textCol.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams textColLp = new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f
+        );
+        textColLp.rightMargin = (int) dpToPx(context, 12f);
+        textCol.setLayoutParams(textColLp);
+
+        TextView switchTitle = new TextView(context);
+        switchTitle.setText("Kompaktní režim");
+        switchTitle.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f);
+        switchTitle.setTypeface(Typeface.DEFAULT_BOLD);
+        switchTitle.setTextColor(textNormalColor);
+        textCol.addView(switchTitle);
+
+        TextView switchDesc = new TextView(context);
+        switchDesc.setText("Skryje HomeCredit (splátky) a zmenší graf cenové historie pro úsporu místa na displeji.");
+        switchDesc.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f);
+        switchDesc.setTextColor(textMutedColor);
+        switchDesc.setPadding(0, (int) dpToPx(context, 2f), 0, 0);
+        textCol.addView(switchDesc);
+
+        switchRow.addView(textCol);
+
+        final Switch compactSwitch = new Switch(context);
+        compactSwitch.setChecked(AlzaPriceChartInjector.isCompactMode());
+        compactSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                AlzaPriceChartInjector.setCompactMode(isChecked);
+                String msg = isChecked ? "Kompaktní režim zapnut (HomeCredit skryt)" : "Kompaktní režim vypnut";
+                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show();
+            }
+        });
+        switchRow.addView(compactSwitch);
+
+        addView(switchRow);
+
+        // Divider
+        addDivider(context, borderColor, 12f);
+
+        // 3. Supported Markets Information Section
+        LinearLayout infoSection = new LinearLayout(context);
+        infoSection.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams infoLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        infoSection.setLayoutParams(infoLp);
+
+        TextView infoTitle = new TextView(context);
+        infoTitle.setText("Podporované trhy: Česko a Slovensko");
+        infoTitle.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f);
+        infoTitle.setTypeface(Typeface.DEFAULT_BOLD);
+        infoTitle.setTextColor(brandGreen);
+        infoSection.addView(infoTitle);
+
+        TextView infoDesc = new TextView(context);
+        infoDesc.setText("Hlídač shopů sleduje vývoj cen výhradně pro e-shopy Alza.cz (ČR) a Alza.sk (SR). V Německu (alza.de), Rakousku (alza.at) ani Maďarsku (alza.hu) data o cenové historii nejsou k dispozici.");
+        infoDesc.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f);
+        infoDesc.setTextColor(textMutedColor);
+        infoDesc.setPadding(0, (int) dpToPx(context, 3f), 0, 0);
+        infoSection.addView(infoDesc);
+
+        addView(infoSection);
+    }
+
+    private void addDivider(Context context, int color, float verticalMarginDp) {
+        View divider = new View(context);
+        divider.setBackgroundColor(color);
+        LinearLayout.LayoutParams divLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                (int) dpToPx(context, 1f)
+        );
+        int marginV = (int) dpToPx(context, verticalMarginDp);
+        divLp.setMargins(0, marginV, 0, marginV);
+        divider.setLayoutParams(divLp);
+        addView(divider);
+    }
+
+    private static boolean isDarkMode(Context context) {
+        try {
+            int nightMode = context.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
+            return nightMode == Configuration.UI_MODE_NIGHT_YES;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    private static float dpToPx(Context context, float dp) {
+        return TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_DIP,
+                dp,
+                context.getResources().getDisplayMetrics()
+        );
+    }
+}

@@ -72,3 +72,28 @@ object PriceSectionContentFingerprint : Fingerprint(
         } == true
     }
 )
+
+object ProductPricesGetAlternativePriceFingerprint : Fingerprint(
+    definingClass = "Lcz/alza/base/lib/product/detail/model/general/data/ProductPrices;",
+    name = "getAlternativePrice",
+    returnType = "Lcz/alza/base/lib/product/detail/model/general/data/AlternativePrice;"
+)
+
+object ThemeSettingsContentFingerprint : Fingerprint(
+    returnType = "V",
+    isStatic = true,
+    custom = { method, _ ->
+        method.parameterTypes.size == 4 &&
+            method.parameterTypes[0] == "Lcz/alza/base/api/settings/api/model/ThemeMode;"
+    }
+)
+
+object SettingsAndSecurityContentFingerprint : Fingerprint(
+    returnType = "V",
+    isStatic = true,
+    custom = { method, _ ->
+        method.parameterTypes.size == 15 &&
+            method.parameterTypes.any { it == "Lcz/alza/base/lib/settings/model/data/ChatBotMagicButtonSettings;" } &&
+            method.parameterTypes.any { it == "Lcz/alza/base/lib/settings/model/data/PasswordInfo;" }
+    }
+)

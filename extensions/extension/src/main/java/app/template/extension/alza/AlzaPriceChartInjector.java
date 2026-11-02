@@ -1,6 +1,7 @@
 package app.template.extension.alza;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.util.Log;
 
 import java.lang.ref.WeakReference;
@@ -13,6 +14,19 @@ public class AlzaPriceChartInjector {
     private static final String TAG = "MorpheAlza";
     public static final String CHART_VIEW_TAG = "MORPHE_HLIDAC_CHART";
 
+    public static final String PREFS_NAME = "morphe_alza_prefs";
+    public static final String PREF_COMPACT_MODE = "compact_mode";
+
+    // Application context reference for SharedPreferences
+    private static volatile Context sAppContext = null;
+    private static volatile Boolean sCompactModeCache = null;
+
+    // Market / Country detection (defaults to CZ)
+    private static volatile String sDetectedDomain = "alza.cz";
+    private static volatile String sDetectedCurrency = "Kč";
+    private static volatile boolean sIsCountrySupported = true;
+    private static volatile Field sAlternativePriceField = null;
+
     // Dynamic bindings populated by patch fingerprints (no hardcoded obfuscated names)
     private static volatile String sAndroidViewClass = null;
     private static volatile String sAndroidViewMethod = null;
@@ -20,6 +34,7 @@ public class AlzaPriceChartInjector {
     private static volatile Method sAndroidViewResolvedMethod = null;
     private static volatile Object sFactoryProxy = null;
     private static volatile Object sUpdateProxy = null;
+    private static volatile Object sSettingsFactoryProxy = null;
     private static volatile ClassLoader sLastClassLoader = null;
 
     // Captured product info
@@ -35,6 +50,120 @@ public class AlzaPriceChartInjector {
         sAndroidViewMethod = androidViewMethod;
         sFunction1Class = function1Class;
         Log.i(TAG, "initComposeBindings: androidView=" + sAndroidViewClass + "." + sAndroidViewMethod + ", function1=" + sFunction1Class);
+    }
+
+    public static Context getApplicationContext() {
+        return sAppContext;
+    }
+
+    public static void setApplicationContext(Context context) {
+        if (context != null && sAppContext == null) {
+            sAppContext = context.getApplicationContext();
+        }
+    }
+
+    /**
+     * Checks if Compact Mode is enabled.
+     * In Compact Mode: HomeCredit/alternative price is removed, and chart is smaller (~135dp).
+     */
+    public static boolean isCompactMode() {
+        if (sCompactModeCache != null) {
+            return sCompactModeCache.booleanValue();
+        }
+        Context ctx = sAppContext;
+        if (ctx != null) {
+            try {
+                SharedPreferences prefs = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+                boolean val = prefs.getBoolean(PREF_COMPACT_MODE, false);
+                sCompactModeCache = Boolean.valueOf(val);
+                return val;
+            } catch (Throwable t) {
+                Log.w(TAG, "isCompactMode error reading prefs", t);
+            }
+        }
+        return false;
+    }
+
+    public static void setCompactMode(boolean compact) {
+        sCompactModeCache = Boolean.valueOf(compact);
+        Context ctx = sAppContext;
+        if (ctx != null) {
+            try {
+                SharedPreferences prefs = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+                prefs.edit().putBoolean(PREF_COMPACT_MODE, compact).apply();
+            } catch (Throwable t) {
+                Log.w(TAG, "setCompactMode error saving prefs", t);
+            }
+        }
+    }
+
+    public static String getDetectedDomain() {
+        return sDetectedDomain != null ? sDetectedDomain : "alza.cz";
+    }
+
+    public static String getDetectedCurrency() {
+        return sDetectedCurrency != null ? sDetectedCurrency : "Kč";
+    }
+
+    public static boolean isCountrySupported() {
+        return sIsCountrySupported;
+    }
+
+    /**
+     * Hooked at index 0 of ProductPrices.getAlternativePrice().
+     * In Compact Mode, returns null to eliminate the entire HomeCredit / installments block.
+     * In normal mode, returns the original AlternativePrice.
+     * Also detects market and currency from ProductPrices.
+     */
+    public static Object filterAlternativePrice(Object productPrices) {
+        if (productPrices != null) {
+            detectMarketFromPrices(productPrices);
+        }
+        if (isCompactMode()) {
+            return null;
+        }
+        return getDirectAlternativePrice(productPrices);
+    }
+
+    private static Object getDirectAlternativePrice(Object productPrices) {
+        if (productPrices == null) return null;
+        try {
+            if (sAlternativePriceField == null) {
+                Field f = productPrices.getClass().getDeclaredField("alternativePrice");
+                f.setAccessible(true);
+                sAlternativePriceField = f;
+            }
+            return sAlternativePriceField.get(productPrices);
+        } catch (Throwable t) {
+            Log.e(TAG, "Error accessing alternativePrice field", t);
+            return null;
+        }
+    }
+
+    public static void detectMarketFromPrices(Object productPrices) {
+        try {
+            Method mGetPrice = productPrices.getClass().getMethod("getPrice");
+            Object priceObj = mGetPrice.invoke(productPrices);
+            if (priceObj != null) {
+                Method mPrimary = priceObj.getClass().getMethod("getPrimaryPrice");
+                Object primary = mPrimary.invoke(priceObj);
+                String primaryStr = primary != null ? primary.toString() : "";
+
+                if (primaryStr.contains("€")) {
+                    sDetectedCurrency = "€";
+                    sDetectedDomain = "alza.sk";
+                    sIsCountrySupported = true;
+                } else if (primaryStr.contains("Kč") || primaryStr.contains("Kc")) {
+                    sDetectedCurrency = "Kč";
+                    sDetectedDomain = "alza.cz";
+                    sIsCountrySupported = true;
+                } else if (primaryStr.contains("Ft") || primaryStr.contains("HUF")) {
+                    sDetectedCurrency = "Ft";
+                    sDetectedDomain = "alza.hu";
+                    sIsCountrySupported = false;
+                }
+            }
+        } catch (Throwable ignored) {}
     }
 
     /**
@@ -61,7 +190,7 @@ public class AlzaPriceChartInjector {
     }
 
     /**
-     * Hooked on ProductDetailParams$WithMeta constructor to capture product ID from Meta.
+     * Hooked on ProductDetailParams$WithMeta constructor to capture product ID and market from Meta.
      */
     public static void onProductDetailParamsWithMeta(Object meta, Object productInfo) {
         try {
@@ -70,9 +199,28 @@ public class AlzaPriceChartInjector {
                     Method mh = meta.getClass().getMethod("getHref");
                     Object href = mh.invoke(meta);
                     if (href != null) {
-                        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(?:/product/|productId=|-d)([0-9]+)").matcher(href.toString());
+                        String hrefStr = href.toString();
+                        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(?:/product/|productId=|-d)([0-9]+)").matcher(hrefStr);
                         if (matcher.find()) {
                             activeCommodityId = matcher.group(1);
+                        }
+                        if (hrefStr.contains(".sk") || hrefStr.contains("/sk/")) {
+                            sDetectedDomain = "alza.sk";
+                            sDetectedCurrency = "€";
+                            sIsCountrySupported = true;
+                        } else if (hrefStr.contains(".cz") || hrefStr.contains("/cz/")) {
+                            sDetectedDomain = "alza.cz";
+                            sDetectedCurrency = "Kč";
+                            sIsCountrySupported = true;
+                        } else if (hrefStr.contains(".de") || hrefStr.contains("/de/")) {
+                            sDetectedDomain = "alza.de";
+                            sIsCountrySupported = false;
+                        } else if (hrefStr.contains(".at") || hrefStr.contains("/at/")) {
+                            sDetectedDomain = "alza.at";
+                            sIsCountrySupported = false;
+                        } else if (hrefStr.contains(".hu") || hrefStr.contains("/hu/")) {
+                            sDetectedDomain = "alza.hu";
+                            sIsCountrySupported = false;
                         }
                     }
                 } catch (Throwable ignored) {}
@@ -109,12 +257,77 @@ public class AlzaPriceChartInjector {
         }
     }
 
+    private static Method resolveAndroidViewMethod(ClassLoader cl) {
+        if (sAndroidViewResolvedMethod != null && sLastClassLoader == cl) {
+            return sAndroidViewResolvedMethod;
+        }
+        Class<?> androidViewOwnerClass = null;
+        if (sAndroidViewClass != null && !sAndroidViewClass.isEmpty()) {
+            try {
+                androidViewOwnerClass = cl.loadClass(sAndroidViewClass);
+            } catch (Throwable ignored) {}
+        }
+        if (androidViewOwnerClass != null) {
+            String methodName = sAndroidViewMethod != null ? sAndroidViewMethod : "a";
+            for (Method m : androidViewOwnerClass.getMethods()) {
+                if (m.getName().equals(methodName) && m.getParameterTypes().length == 6) {
+                    sAndroidViewResolvedMethod = m;
+                    break;
+                }
+            }
+        }
+        return sAndroidViewResolvedMethod;
+    }
+
+    /**
+     * Injects MorpheSettingsCardView into Alza's Compose settings screens.
+     */
+    public static void onSettingsCompose(Object composer) {
+        try {
+            if (composer == null) return;
+            ClassLoader cl = composer.getClass().getClassLoader();
+            if (cl == null) return;
+
+            Method androidViewMethod = resolveAndroidViewMethod(cl);
+            if (androidViewMethod == null) return;
+
+            Class<?> vwcClass = androidViewMethod.getParameterTypes()[0];
+            if (sSettingsFactoryProxy == null || sLastClassLoader != cl) {
+                sLastClassLoader = cl;
+                sSettingsFactoryProxy = Proxy.newProxyInstance(
+                        cl,
+                        new Class<?>[]{vwcClass},
+                        new InvocationHandler() {
+                            @Override
+                            public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+                                String name = method.getName();
+                                if ("invoke".equals(name) && args != null && args.length == 1 && args[0] instanceof Context) {
+                                    Context context = (Context) args[0];
+                                    setApplicationContext(context);
+                                    return new MorpheSettingsCardView(context);
+                                }
+                                if ("toString".equals(name)) return "MorpheSettingsFactoryProxy";
+                                if ("hashCode".equals(name)) return Integer.valueOf(System.identityHashCode(proxy));
+                                if ("equals".equals(name)) {
+                                    return Boolean.valueOf(args != null && args.length > 0 && proxy == args[0]);
+                                }
+                                return null;
+                            }
+                        }
+                );
+            }
+
+            // AndroidView(factory=sSettingsFactoryProxy, modifier=null, update=null, composer, changed=6, default=6)
+            androidViewMethod.invoke(null, sSettingsFactoryProxy, null, null, composer, 6, 6);
+            Log.i(TAG, "onSettingsCompose: emitted MorpheSettingsCardView");
+        } catch (Throwable t) {
+            Log.e(TAG, "Error in onSettingsCompose: " + t.getMessage(), t);
+        }
+    }
+
     /**
      * Natively emits Compose AndroidView (androidx.compose.ui.viewinterop.AndroidView)
-     * at the end of the price Column in w4m.i.
-     *
-     * PriceHistoryChartView is added directly to AndroidViewsHandler in AndroidComposeView,
-     * scrolls 100% fluidly with the screen, and pushes down subsequent content natively.
+     * at the end of the price section.
      */
     public static void onPriceSectionCompose(Object composer) {
         try {
@@ -127,43 +340,13 @@ public class AlzaPriceChartInjector {
             ClassLoader cl = composer.getClass().getClassLoader();
             if (cl == null) return;
 
-            Class<?> vwcClass = null;
-            if (sFunction1Class != null && !sFunction1Class.isEmpty()) {
-                try {
-                    vwcClass = cl.loadClass(sFunction1Class);
-                } catch (Throwable ignored) {}
-            }
-
-            if (sAndroidViewResolvedMethod == null || sLastClassLoader != cl) {
-                Class<?> androidViewOwnerClass = null;
-                if (sAndroidViewClass != null && !sAndroidViewClass.isEmpty()) {
-                    try {
-                        androidViewOwnerClass = cl.loadClass(sAndroidViewClass);
-                    } catch (Throwable ignored) {}
-                }
-
-                if (androidViewOwnerClass != null) {
-                    String methodName = sAndroidViewMethod != null ? sAndroidViewMethod : "a";
-                    for (Method m : androidViewOwnerClass.getMethods()) {
-                        if (m.getName().equals(methodName) && m.getParameterTypes().length == 6) {
-                            sAndroidViewResolvedMethod = m;
-                            if (vwcClass == null) {
-                                vwcClass = m.getParameterTypes()[0];
-                            }
-                            break;
-                        }
-                    }
-                }
-            }
-
-            Method androidViewMethod = sAndroidViewResolvedMethod;
+            Method androidViewMethod = resolveAndroidViewMethod(cl);
             if (androidViewMethod == null) {
                 Log.e(TAG, "onPriceSectionCompose: AndroidView method not resolved");
                 return;
             }
-            if (vwcClass == null) {
-                vwcClass = androidViewMethod.getParameterTypes()[0];
-            }
+
+            Class<?> vwcClass = androidViewMethod.getParameterTypes()[0];
 
             if (sFactoryProxy == null || sUpdateProxy == null || sLastClassLoader != cl) {
                 sLastClassLoader = cl;
@@ -176,6 +359,8 @@ public class AlzaPriceChartInjector {
                                 String name = method.getName();
                                 if (name.equals("invoke") && args != null && args.length == 1 && args[0] instanceof Context) {
                                     Context context = (Context) args[0];
+                                    setApplicationContext(context);
+
                                     PriceHistoryChartView chartView = new PriceHistoryChartView(context);
                                     chartView.setTag(CHART_VIEW_TAG);
 
@@ -214,6 +399,8 @@ public class AlzaPriceChartInjector {
                                 if (name.equals("invoke") && args != null && args.length == 1) {
                                     if (args[0] instanceof PriceHistoryChartView) {
                                         PriceHistoryChartView chartView = (PriceHistoryChartView) args[0];
+                                        setApplicationContext(chartView.getContext());
+
                                         if (activeCommodityId == null || activeCommodityId.isEmpty()) {
                                             resolveProductFromGodFragment(lastGodFragment.get());
                                         }
@@ -244,7 +431,6 @@ public class AlzaPriceChartInjector {
             }
 
             // Call AndroidView(factory, modifier=null, update=updateProxy, composer, changed=6, default=2)
-            // default = 2 means bit 1 (2) is set -> use default Modifier; bit 2 (4) is 0 -> use updateProxy
             androidViewMethod.invoke(null, sFactoryProxy, null, sUpdateProxy, composer, 6, 2);
             Log.i(TAG, "onPriceSectionCompose: successfully emitted native inline AndroidView");
 
@@ -363,7 +549,8 @@ public class AlzaPriceChartInjector {
                     Method mh = meta.getClass().getMethod("getHref");
                     Object href = mh.invoke(meta);
                     if (href != null) {
-                        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(?:/product/|productId=|-d)([0-9]+)").matcher(href.toString());
+                        String hrefStr = href.toString();
+                        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(?:/product/|productId=|-d)([0-9]+)").matcher(hrefStr);
                         if (matcher.find()) {
                             return matcher.group(1);
                         }
@@ -405,7 +592,12 @@ public class AlzaPriceChartInjector {
             final String identifier,
             final String productName
     ) {
-        Log.i(TAG, "fetchData: requesting data for commodityId=" + commodityId);
+        Log.i(TAG, "fetchData: requesting data for commodityId=" + commodityId + " (domain=" + sDetectedDomain + ")");
+        if (!sIsCountrySupported) {
+            chartView.setState(PriceHistoryChartView.State.UNSUPPORTED_COUNTRY);
+            return;
+        }
+
         HlidacShopuClient.getInstance().fetchPriceHistory(
                 commodityId,
                 null,
