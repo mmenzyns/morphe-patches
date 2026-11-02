@@ -283,16 +283,16 @@ public class PriceHistoryChartView extends View {
             float containerWidthDp = (widthSize > 0 && widthSize <= screenWidth) ? (widthSize / density) : (screenWidth / density - 32f);
 
             // Responsive width:
-            // The price block on the left and the 20dp gap take ~38-42% of the row.
-            // The compact chart takes the remaining share (~48% of the row width),
-            // adapting smoothly to any phone width, tablet, orientation, or density.
-            float targetWidthDp = Math.max(140f, Math.min(240f, containerWidthDp * 0.48f));
+            // FlowRow contains the price block (~35-42% of row) + 20dp gap (~5%).
+            // Taking ~57% of container width (up to 220dp) allows the card
+            // to expand and fill the unused space on the right without wrapping.
+            float targetWidthDp = Math.max(160f, Math.min(220f, containerWidthDp * 0.57f));
             width = (int) dpToPx(targetWidthDp);
 
             // Responsive height:
-            // Proportional to width using standard card ratio (~1.72:1),
-            // adapting smoothly so the chart is never squished or stretched.
-            float targetHeightDp = Math.max(82f, Math.min(135f, targetWidthDp * 0.58f));
+            // Proportional to width using card ratio (~2.0:1),
+            // giving a sleek, balanced card that matches the price block height.
+            float targetHeightDp = Math.max(85f, Math.min(120f, targetWidthDp * 0.50f));
             targetHeight = (int) dpToPx(targetHeightDp);
 
             if (heightMode == MeasureSpec.EXACTLY && heightSize > 0) {
@@ -353,7 +353,8 @@ public class PriceHistoryChartView extends View {
 
         // Draw card background & border
         float inset = AlzaPriceChartInjector.isCompactMode() ? dpToPx(2f) : (paddingPx / 2f);
-        cardRect.set(inset, inset, width - inset, height - inset);
+        float marginLeft = AlzaPriceChartInjector.isCompactMode() ? Math.max(dpToPx(8f), width * 0.045f) : 0f;
+        cardRect.set(inset + marginLeft, inset, width - inset, height - inset);
         float radius = Math.max(dpToPx(8f), Math.min(dpToPx(14f), height * 0.10f));
         canvas.drawRoundRect(cardRect, radius, radius, cardBgPaint);
         canvas.drawRoundRect(cardRect, radius, radius, cardBorderPaint);
@@ -370,15 +371,18 @@ public class PriceHistoryChartView extends View {
     private void drawCompactCard(Canvas canvas, int width, int height, boolean dark) {
         boolean sk = AlzaPriceChartInjector.isSlovak(getContext());
 
-        // Responsive paddings dynamically derived from view dimensions
-        float padH = Math.max(dpToPx(6f), width * 0.045f);
-        float padV = Math.max(dpToPx(5f), height * 0.055f);
+        float cardW = cardRect.width();
+        float cardH = cardRect.height();
 
-        // 1. Header (Logo on left, Real discount on right) - proportional to height
-        float headerHeight = height * 0.20f;
+        // Responsive paddings dynamically derived from card dimensions
+        float padH = Math.max(dpToPx(6f), cardW * 0.045f);
+        float padV = Math.max(dpToPx(5f), cardH * 0.055f);
+
+        // 1. Header (Logo on left, Real discount on right) - proportional to card height
+        float headerHeight = cardH * 0.20f;
         float logoHeight = Math.max(dpToPx(10f), Math.min(dpToPx(15f), headerHeight * 0.65f));
-        float logoLeft = padH;
-        float logoTop = padV + (headerHeight - logoHeight) / 2f;
+        float logoLeft = cardRect.left + padH;
+        float logoTop = cardRect.top + padV + (headerHeight - logoHeight) / 2f;
         HlidacLogo.draw(canvas, logoLeft, logoTop, logoHeight, dark);
 
         // Header right: Real discount percentage or min price
@@ -406,7 +410,7 @@ public class PriceHistoryChartView extends View {
             float prefW = discountLabelPaint.measureText(prefix);
             float textBaseline = logoTop + logoHeight * 0.88f;
 
-            float rightX = width - padH;
+            float rightX = cardRect.right - padH;
             canvas.drawText(badgeText, rightX - valW, textBaseline, discountValuePaint);
 
             // Only draw prefix if there is enough space between logo and discount value
@@ -417,23 +421,23 @@ public class PriceHistoryChartView extends View {
         }
 
         // 2. Chart Plot Area - occupying the central ~60% of vertical height
-        float plotLeft = padH;
-        float plotTop = padV + headerHeight + dpToPx(2f);
-        float plotRight = width - padH;
-        float plotBottom = height - Math.max(dpToPx(15f), height * 0.18f);
+        float plotLeft = cardRect.left + padH;
+        float plotTop = cardRect.top + padV + headerHeight + dpToPx(2f);
+        float plotRight = cardRect.right - padH;
+        float plotBottom = cardRect.bottom - Math.max(dpToPx(15f), cardH * 0.18f);
 
         switch (state) {
             case LOADING:
-                subtitlePaint.setTextSize(Math.max(dpToPx(8.5f), height * 0.09f));
+                subtitlePaint.setTextSize(Math.max(dpToPx(8.5f), cardH * 0.09f));
                 drawCenteredText(canvas, sk ? "Načítavam..." : "Načítám...", plotLeft, plotTop, plotRight, plotBottom, subtitlePaint);
                 break;
             case EMPTY:
             case UNSUPPORTED_COUNTRY:
-                labelPaint.setTextSize(Math.max(dpToPx(8f), height * 0.085f));
+                labelPaint.setTextSize(Math.max(dpToPx(8f), cardH * 0.085f));
                 drawCenteredText(canvas, sk ? "História nie je k dispozícii" : "Historie není k dispozici", plotLeft, plotTop, plotRight, plotBottom, labelPaint);
                 break;
             case ERROR:
-                labelPaint.setTextSize(Math.max(dpToPx(8f), height * 0.085f));
+                labelPaint.setTextSize(Math.max(dpToPx(8f), cardH * 0.085f));
                 drawCenteredText(canvas, sk ? "Chyba načítania" : "Chyba načtení", plotLeft, plotTop, plotRight, plotBottom, labelPaint);
                 break;
             case LOADED:
@@ -614,7 +618,7 @@ public class PriceHistoryChartView extends View {
         if (maxTime <= minTime) maxTime = minTime + 1;
 
         int numDates = compact ? ((chartRight - left) > dpToPx(150f) ? 3 : 2) : ((chartRight - left) > dpToPx(240f) ? 4 : 3);
-        float dateY = bottom + Math.max(dpToPx(8f), (getHeight() - bottom) * 0.58f);
+        float dateY = bottom + Math.max(dpToPx(8f), (cardRect.bottom - bottom) * 0.58f);
         for (int i = 0; i < numDates; i++) {
             float frac = (float) i / (float) (numDates - 1);
             long time = minTime + (long) ((maxTime - minTime) * frac);
