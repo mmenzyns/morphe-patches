@@ -51,15 +51,11 @@ public class PriceHistoryChartView extends View {
     private Paint currentAreaPaint;
     private Paint originalCurvePaint;
     private Paint toggleTextPaint;
-    private Paint gearTextPaint;
-    private Paint badgePaint;
-    private Paint badgeBgPaint;
 
     private Path currentCurvePath = new Path();
     private Path currentAreaPath = new Path();
     private Path originalCurvePath = new Path();
     private RectF cardRect = new RectF();
-    private RectF badgeRect = new RectF();
 
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("MM/yy", Locale.getDefault());
     private final DecimalFormat priceFormat;
@@ -131,16 +127,6 @@ public class PriceHistoryChartView extends View {
         toggleTextPaint.setTextSize(dpToPx(11f));
         toggleTextPaint.setFakeBoldText(true);
 
-        gearTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        gearTextPaint.setTextSize(dpToPx(13f));
-
-        badgePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        badgePaint.setTextSize(dpToPx(8.5f));
-        badgePaint.setFakeBoldText(true);
-
-        badgeBgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        badgeBgPaint.setStyle(Paint.Style.FILL);
-
         currentCurvePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         currentCurvePaint.setStyle(Paint.Style.STROKE);
         currentCurvePaint.setStrokeWidth(dpToPx(2.5f));
@@ -211,19 +197,11 @@ public class PriceHistoryChartView extends View {
             float y = event.getY();
             int width = getWidth();
 
-            // Rightmost header buttons:
-            // [width - 45dp .. width]: Toggle ("▼ Sbalit" / "▲ Graf")
-            // [width - 80dp .. width - 45dp]: Settings Gear ("⚙")
-            float toggleLeft = width - paddingPx - dpToPx(45f);
-            float gearLeft = width - paddingPx - dpToPx(80f);
+            // Rightmost header toggle ("▼ Sbalit" / "▲ Graf")
+            float toggleLeft = width - paddingPx - dpToPx(50f);
 
             if (isCollapsed) {
-                // When collapsed, check if gear clicked
-                if (x >= gearLeft && x < toggleLeft) {
-                    openSettingsDialog();
-                    return true;
-                }
-                // Otherwise tapping collapsed bar expands it
+                // Tapping collapsed bar expands it
                 isCollapsed = false;
                 requestLayout();
                 invalidate();
@@ -237,10 +215,6 @@ public class PriceHistoryChartView extends View {
                         invalidate();
                         return true;
                     }
-                    if (x >= gearLeft && x < toggleLeft) {
-                        openSettingsDialog();
-                        return true;
-                    }
                     openHlidacWeb();
                     return true;
                 }
@@ -250,16 +224,6 @@ public class PriceHistoryChartView extends View {
             }
         }
         return true;
-    }
-
-    private void openSettingsDialog() {
-        MorpheSettingsDialog.show(getContext(), new Runnable() {
-            @Override
-            public void run() {
-                requestLayout();
-                invalidate();
-            }
-        });
     }
 
     private void openHlidacWeb() {
@@ -332,7 +296,6 @@ public class PriceHistoryChartView extends View {
         labelPaint.setColor(labelColor);
         discountLabelPaint.setColor(textNormalColor);
         toggleTextPaint.setColor(toggleColor);
-        gearTextPaint.setColor(subtitleColor);
 
         // Draw card background & border
         cardRect.set(paddingPx / 2, paddingPx / 2, width - (paddingPx / 2), height - (paddingPx / 2));
@@ -358,14 +321,9 @@ public class PriceHistoryChartView extends View {
 
         float curX = logoLeft + HlidacLogo.getScaledWidth(logoHeight) + dpToPx(8f);
 
-        // CZ / SK subtle pill badge
-        drawMarketBadge(canvas, curX, midY - dpToPx(7f), dark);
-        curX += dpToPx(38f);
-
-        // 2. Skutečná sleva or country notice
+        // 2. Skutečná sleva
         if (state == State.UNSUPPORTED_COUNTRY) {
-            discountValuePaint.setColor(Color.parseColor("#9CA3AF"));
-            canvas.drawText(sk ? "Iba CZ a SK" : "Pouze CZ a SK", curX, midY + dpToPx(4.5f), discountValuePaint);
+            // No warning text inside app
         } else if (data != null) {
             PriceHistoryData.DiscountCalculation calc = data.calculateHlidacShopuDiscount();
             String discountPrefix = sk ? "Skutočná zľava: " : "Skutečná sleva: ";
@@ -380,11 +338,7 @@ public class PriceHistoryChartView extends View {
             canvas.drawText(discountText, curX, midY + dpToPx(4.5f), discountValuePaint);
         }
 
-        // 3. Settings Gear "⚙"
-        float gearX = width - paddingPx - dpToPx(65f);
-        canvas.drawText("⚙", gearX, midY + dpToPx(4.5f), gearTextPaint);
-
-        // 4. "▲ Graf" toggle
+        // "▲ Graf" toggle
         float expandX = width - paddingPx - dpToPx(40f);
         canvas.drawText("▲ Graf", expandX, midY + dpToPx(4f), toggleTextPaint);
     }
@@ -400,22 +354,14 @@ public class PriceHistoryChartView extends View {
         float logoHeight = dpToPx(compact ? 13.5f : 16f);
         HlidacLogo.draw(canvas, headerLeft, headerTop - dpToPx(compact ? 10f : 12f), logoHeight, dark);
 
-        // 2. CZ / SK market badge right after logo
-        float badgeLeft = headerLeft + HlidacLogo.getScaledWidth(logoHeight) + dpToPx(8f);
-        drawMarketBadge(canvas, badgeLeft, headerTop - dpToPx(compact ? 10f : 11f), dark);
-
-        // 3. Controls on the right: "⚙" and "▼ Sbalit" / "▼ Zbaliť"
-        float gearX = width - paddingPx - dpToPx(68f);
-        canvas.drawText("⚙", gearX, headerTop - dpToPx(0.5f), gearTextPaint);
-
+        // 2. Controls on the right: "▼ Sbalit" / "▼ Zbaliť"
         float toggleX = width - paddingPx - dpToPx(45f);
         canvas.drawText(sk ? "▼ Zbaliť" : "▼ Sbalit", toggleX, headerTop - dpToPx(0.5f), toggleTextPaint);
 
-        // 4. SKUTEČNÁ / SKUTOČNÁ ZĽAVA
+        // 3. SKUTEČNÁ / SKUTOČNÁ ZĽAVA
         float discountRowY = headerTop + dpToPx(compact ? 13f : 16f);
         if (state == State.UNSUPPORTED_COUNTRY) {
             discountValuePaint.setColor(Color.parseColor("#9CA3AF"));
-            canvas.drawText(sk ? "Hlídač shopov sleduje iba české a slovenské obchody" : "Hlídač shopů sleduje pouze české a slovenské obchody", headerLeft, discountRowY, subtitlePaint);
         } else if (state == State.LOADED && data != null) {
             PriceHistoryData.DiscountCalculation calc = data.calculateHlidacShopuDiscount();
 
@@ -439,7 +385,7 @@ public class PriceHistoryChartView extends View {
             canvas.drawText(valStr, headerLeft + labelWidth, discountRowY, discountValuePaint);
         }
 
-        // 5. Plot Area
+        // 4. Plot Area
         float plotLeft = headerLeft;
         float plotTop = headerTop + dpToPx(compact ? 24f : 28f);
         float plotRight = width - paddingPx - dpToPx(4f);
@@ -450,32 +396,16 @@ public class PriceHistoryChartView extends View {
                 drawCenteredText(canvas, sk ? "Načítavam históriu cien z Hlídača shopov..." : "Načítám historii cen z Hlídače shopů...", plotLeft, plotTop, plotRight, plotBottom, subtitlePaint);
                 break;
             case EMPTY:
+            case UNSUPPORTED_COUNTRY:
                 drawCenteredText(canvas, sk ? "História cien pre tento produkt nie je k dispozícii" : "Historie cen pro tento produkt není k dispozici", plotLeft, plotTop, plotRight, plotBottom, subtitlePaint);
                 break;
             case ERROR:
                 drawCenteredText(canvas, sk ? "Údaje o histórii cien sa nepodarilo načítať" : "Data o historii cen se nepodařilo načíst", plotLeft, plotTop, plotRight, plotBottom, subtitlePaint);
                 break;
-            case UNSUPPORTED_COUNTRY:
-                drawCenteredText(canvas, sk ? "Hlídač shopov podporuje výhradne CZ a SK trh" : "Hlídač shopů podporuje výhradně CZ a SK trh", plotLeft, plotTop, plotRight, plotBottom, subtitlePaint);
-                break;
             case LOADED:
                 drawChart(canvas, plotLeft, plotTop, plotRight, plotBottom, compact);
                 break;
         }
-    }
-
-    private void drawMarketBadge(Canvas canvas, float left, float top, boolean dark) {
-        float bWidth = dpToPx(34f);
-        float bHeight = dpToPx(13f);
-        badgeRect.set(left, top, left + bWidth, top + bHeight);
-
-        badgeBgPaint.setColor(dark ? Color.parseColor("#1B3320") : Color.parseColor("#E8F5E9"));
-        canvas.drawRoundRect(badgeRect, dpToPx(4f), dpToPx(4f), badgeBgPaint);
-
-        badgePaint.setColor(Color.parseColor("#00A651"));
-        float tx = left + (bWidth / 2f) - (badgePaint.measureText("CZ/SK") / 2f);
-        float ty = top + (bHeight / 2f) - ((badgePaint.descent() + badgePaint.ascent()) / 2f);
-        canvas.drawText("CZ/SK", tx, ty, badgePaint);
     }
 
     private void drawCenteredText(Canvas canvas, String text, float left, float top, float right, float bottom, Paint paint) {

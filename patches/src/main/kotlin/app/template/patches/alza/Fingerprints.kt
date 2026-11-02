@@ -97,3 +97,17 @@ object SettingsAndSecurityContentFingerprint : Fingerprint(
             method.parameterTypes.any { it == "Lcz/alza/base/lib/settings/model/data/PasswordInfo;" }
     }
 )
+
+object AccountMenuContentFingerprint : Fingerprint(
+    returnType = "V",
+    isStatic = true,
+    custom = { method, _ ->
+        method.parameterTypes.size == 10 &&
+            method.parameterTypes[0] == "Z" &&
+            method.parameterTypes[9] == "I" &&
+            method.implementation?.instructions?.any { inst ->
+                (inst as? ReferenceInstruction)?.reference?.toString()?.contains("cz/alza/base/android/menu/common/ui/model/Actions") == true
+            } == true
+    }
+)
+

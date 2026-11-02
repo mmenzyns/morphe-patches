@@ -9,8 +9,8 @@ private const val EXTENSION_CLASS = "Lapp/template/extension/alza/AlzaPriceChart
 
 @Suppress("unused")
 val alzaPriceHistoryPatch = bytecodePatch(
-    name = "Alza Hlídač shopů Price History",
-    description = "Displays inline price history chart from Hlídač shopů in product detail screen (CZ/SK) with Compact mode and Settings.",
+    name = "Alza Hlídač shopů Price History (CZ / SK)",
+    description = "Displays inline price history chart from Hlídač shopů in product detail screen for Czech Republic and Slovakia (alza.cz / alza.sk). Includes compact mode replacing HomeCredit installments and settings in Menu.",
     default = true
 ) {
     compatibleWith(COMPATIBILITY_ALZA)
@@ -169,6 +169,25 @@ val alzaPriceHistoryPatch = bytecodePatch(
                     """
                         invoke-static/range {p13 .. p13}, $EXTENSION_CLASS->onSettingsCompose(Ljava/lang/Object;)V
                     """
+                )
+            }
+        } catch (ignored: Throwable) {
+            // Optional fallback
+        }
+
+        // 8. Hook AccountMenuContentFingerprint (hb.a) - inject Morphe settings item into Menu under Nastavení
+        try {
+            val accountMenuMethod = AccountMenuContentFingerprint.method
+            if (accountMenuMethod != null) {
+                // p2 is k2f (menu items list), p5 is onButtonClick lambda
+                accountMenuMethod.addInstructions(
+                    0,
+                    """
+                        invoke-static {p2}, $EXTENSION_CLASS->injectMorpheMenuItem(Ljava/lang/Object;)Ljava/lang/Object;
+                        move-result-object p2
+                        invoke-static {p5}, $EXTENSION_CLASS->wrapMenuButtonAction(Ljava/lang/Object;)Ljava/lang/Object;
+                        move-result-object p5
+                    """.trimIndent()
                 )
             }
         } catch (ignored: Throwable) {

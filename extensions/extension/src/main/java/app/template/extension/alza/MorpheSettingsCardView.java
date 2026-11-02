@@ -65,7 +65,7 @@ public class MorpheSettingsCardView extends LinearLayout {
         cardLp.setMargins(marginH, marginV, marginH, marginV);
         setLayoutParams(cardLp);
 
-        // 1. Header: "Morphe – Hlídač shopů" + "CZ / SK" badge
+        // 1. Header: "Morphe – Hlídač shopů"
         LinearLayout headerRow = new LinearLayout(context);
         headerRow.setOrientation(LinearLayout.HORIZONTAL);
         headerRow.setGravity(Gravity.CENTER_VERTICAL);
@@ -81,26 +81,9 @@ public class MorpheSettingsCardView extends LinearLayout {
         titleView.setTypeface(Typeface.DEFAULT_BOLD);
         titleView.setTextColor(brandGreen);
         LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(
-                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
         );
         headerRow.addView(titleView, titleLp);
-
-        // Market badge "CZ / SK"
-        TextView badgeView = new TextView(context);
-        badgeView.setText("CZ / SK");
-        badgeView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f);
-        badgeView.setTypeface(Typeface.DEFAULT_BOLD);
-        badgeView.setTextColor(brandGreen);
-        GradientDrawable badgeBg = new GradientDrawable();
-        badgeBg.setShape(GradientDrawable.RECTANGLE);
-        badgeBg.setColor(dark ? Color.parseColor("#1B3320") : Color.parseColor("#E8F5E9"));
-        badgeBg.setCornerRadius(dpToPx(context, 6f));
-        badgeBg.setStroke((int) dpToPx(context, 1f), Color.parseColor("#2E7D32"));
-        badgeView.setBackground(badgeBg);
-        int bPadH = (int) dpToPx(context, 8f);
-        int bPadV = (int) dpToPx(context, 3f);
-        badgeView.setPadding(bPadH, bPadV, bPadH, bPadV);
-        headerRow.addView(badgeView);
 
         addView(headerRow);
 
@@ -156,34 +139,6 @@ public class MorpheSettingsCardView extends LinearLayout {
         switchRow.addView(compactSwitch);
 
         addView(switchRow);
-
-        // Divider
-        addDivider(context, borderColor, 12f);
-
-        // 3. Supported Markets Information Section
-        LinearLayout infoSection = new LinearLayout(context);
-        infoSection.setOrientation(LinearLayout.VERTICAL);
-        LinearLayout.LayoutParams infoLp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-        );
-        infoSection.setLayoutParams(infoLp);
-
-        TextView infoTitle = new TextView(context);
-        infoTitle.setText(sk ? "Podporované trhy: Česko a Slovensko" : "Podporované trhy: Česko a Slovensko");
-        infoTitle.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f);
-        infoTitle.setTypeface(Typeface.DEFAULT_BOLD);
-        infoTitle.setTextColor(brandGreen);
-        infoSection.addView(infoTitle);
-
-        TextView infoDesc = new TextView(context);
-        infoDesc.setText(sk ? "Hlídač shopov sleduje vývoj cien výhradne pre e-shopy Alza.sk (SR) a Alza.cz (ČR). V Nemecku (alza.de), Rakúsku (alza.at) ani Maďarsku (alza.hu) údaje o cenovej histórii nie sú k dispozícii." : "Hlídač shopů sleduje vývoj cen výhradně pro e-shopy Alza.cz (ČR) a Alza.sk (SR). V Německu (alza.de), Rakousku (alza.at) ani Maďarsku (alza.hu) data o cenové historii nejsou k dispozici.");
-        infoDesc.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f);
-        infoDesc.setTextColor(textMutedColor);
-        infoDesc.setPadding(0, (int) dpToPx(context, 3f), 0, 0);
-        infoSection.addView(infoDesc);
-
-        addView(infoSection);
     }
 
     private void addDivider(Context context, int color, float verticalMarginDp) {
