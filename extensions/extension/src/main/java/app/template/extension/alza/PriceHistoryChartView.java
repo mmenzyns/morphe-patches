@@ -148,11 +148,21 @@ public class PriceHistoryChartView extends View {
             this.state = State.EMPTY;
         }
         invalidate();
+        postInvalidate();
+    }
+
+    public PriceHistoryData getData() {
+        return data;
     }
 
     public void setState(State state) {
         this.state = state;
         invalidate();
+        postInvalidate();
+    }
+
+    public State getState() {
+        return state;
     }
 
     public void setCollapsed(boolean collapsed) {
@@ -217,6 +227,13 @@ public class PriceHistoryChartView extends View {
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         int width = MeasureSpec.getSize(widthMeasureSpec);
+        if (width <= 0) {
+            try {
+                width = getResources().getDisplayMetrics().widthPixels;
+            } catch (Throwable ignored) {
+                width = 1080;
+            }
+        }
         int targetHeight = isCollapsed ? (int) dpToPx(38f) : (int) dpToPx(210f);
         setMeasuredDimension(width, targetHeight);
     }

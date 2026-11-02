@@ -63,8 +63,9 @@ val alzaPriceHistoryPatch = bytecodePatch(
             """
         )
 
-        // B. Inject onPriceSectionCompose at the very end of the price Column
-        // (the last .q [endReplaceableGroup/endNode] before .W [skipToGroupEnd])
+        // B. Inject onPriceSectionCompose immediately after the price Column closes (last .q before .W)
+        // This ensures the chart executes AFTER both branches (with VAT and without VAT) have merged.
+        // If injected before the last .q, the branch with VAT jumps over the instruction via goto.
         val instructions = priceMethod.implementation!!.instructions
         val skipIndex = instructions.indexOfFirst { instruction ->
             val ref = (instruction as? ReferenceInstruction)?.reference?.toString() ?: ""
@@ -76,7 +77,7 @@ val alzaPriceHistoryPatch = bytecodePatch(
                 val ref = (instruction as? ReferenceInstruction)?.reference?.toString() ?: ""
                 ref.contains(";->q(Z)V") || ref.contains("endReplaceableGroup") || ref.contains("endNode")
             }
-            if (lastQBeforeSkip != -1) lastQBeforeSkip else skipIndex
+            if (lastQBeforeSkip != -1) lastQBeforeSkip + 1 else skipIndex
         } else {
             instructions.size - 1
         }

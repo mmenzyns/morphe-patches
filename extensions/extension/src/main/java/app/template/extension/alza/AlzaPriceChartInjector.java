@@ -203,10 +203,15 @@ public class AlzaPriceChartInjector {
                                         resolveProductFromGodFragment(lastGodFragment.get());
                                     }
                                     String commodityId = activeCommodityId;
-                                    if (commodityId != null && !commodityId.isEmpty() && !commodityId.equals(chartView.getCommodityId())) {
-                                        chartView.setCommodityId(commodityId);
-                                        fetchData(chartView, commodityId, null, activeProductName);
+                                    if (commodityId != null && !commodityId.isEmpty() && !commodityId.equals("0")) {
+                                        if (!commodityId.equals(chartView.getCommodityId())) {
+                                            chartView.setCommodityId(commodityId);
+                                            fetchData(chartView, commodityId, null, activeProductName);
+                                        } else if (chartView.getData() == null && chartView.getState() != PriceHistoryChartView.State.LOADING) {
+                                            fetchData(chartView, commodityId, null, activeProductName);
+                                        }
                                     }
+                                    Log.i(TAG, "Compose AndroidView update: chartView for " + chartView.getCommodityId() + " (state=" + chartView.getState() + ")");
                                 }
                                 return null;
                             }
