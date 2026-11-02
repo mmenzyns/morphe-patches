@@ -1,3 +1,9 @@
+## [1.3.4](https://github.com/mmenzyns/morphe-patches/compare/v1.3.3...v1.3.4) (2026-11-02)
+
+### 🐛 Bug Fixes
+
+* **alza:** Implement native inline Compose injection using AndroidView and dynamic fingerprints ([9d5b338](https://github.com/mmenzyns/morphe-patches/commit/9d5b3383fe5287f594ccf8d441041a8747834230))
+
 ## [1.3.3](https://github.com/mmenzyns/morphe-patches/compare/v1.3.2...v1.3.3) (2026-11-01)
 
 ### 🐛 Bug Fixes
