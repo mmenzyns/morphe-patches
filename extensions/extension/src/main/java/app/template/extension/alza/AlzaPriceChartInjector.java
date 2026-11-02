@@ -42,7 +42,6 @@ public class AlzaPriceChartInjector {
     private static volatile String sDetectedDomain = null;
     private static volatile String sDetectedCurrency = null;
     private static volatile boolean sIsCountrySupported = true;
-    private static volatile Field sAlternativePriceField = null;
 
     // Dynamic bindings populated by patch fingerprints (no hardcoded obfuscated names)
     private static volatile String sAndroidViewClass = null;
@@ -254,12 +253,12 @@ public class AlzaPriceChartInjector {
     }
 
     /**
-     * Hooked at index 0 of ProductPrices.getAlternativePrice().
+     * Intercepts ProductPrices.getAlternativePrice().
      * In Compact Mode, returns null to eliminate the entire HomeCredit / installments block.
-     * In normal mode, returns the original AlternativePrice.
+     * In normal mode, returns the original alternative price without field reflection.
      * Also detects market and currency from ProductPrices.
      */
-    public static Object filterAlternativePrice(Object productPrices) {
+    public static Object filterAlternativePrice(Object productPrices, Object originalAltPrice) {
         if (productPrices != null) {
             detectMarketFromPrices(productPrices);
         }
@@ -267,22 +266,7 @@ public class AlzaPriceChartInjector {
             Log.i(TAG, "filterAlternativePrice: Compact mode active -> eliminating HomeCredit (returning null)");
             return null;
         }
-        return getDirectAlternativePrice(productPrices);
-    }
-
-    private static Object getDirectAlternativePrice(Object productPrices) {
-        if (productPrices == null) return null;
-        try {
-            if (sAlternativePriceField == null) {
-                Field f = productPrices.getClass().getDeclaredField("alternativePrice");
-                f.setAccessible(true);
-                sAlternativePriceField = f;
-            }
-            return sAlternativePriceField.get(productPrices);
-        } catch (Throwable t) {
-            Log.e(TAG, "Error accessing alternativePrice field", t);
-            return null;
-        }
+        return originalAltPrice;
     }
 
     public static void detectMarketFromPrices(Object productPrices) {
@@ -397,8 +381,13 @@ public class AlzaPriceChartInjector {
                             sDetectedDomain = "alza.cz";
                             sDetectedCurrency = "Kč";
                             sIsCountrySupported = true;
-                        } else {
+                        } else if (hrefStr.contains(".hu") || hrefStr.contains("/hu/") ||
+                                   hrefStr.contains(".de") || hrefStr.contains("/de/") ||
+                                   hrefStr.contains(".at") || hrefStr.contains("/at/") ||
+                                   hrefStr.contains(".co.uk") || hrefStr.contains("/uk/")) {
                             sIsCountrySupported = false;
+                        } else {
+                            sIsCountrySupported = true;
                         }
                     }
                 } catch (Throwable ignored) {}
@@ -419,14 +408,27 @@ public class AlzaPriceChartInjector {
     }
 
     /**
-     * Lightweight hook on GodFragment.onCreateView entry to keep a weak reference for fallback resolution.
+     * Lightweight hook on GodFragment.onCreateView entry to keep a weak reference for fallback resolution
+     * and reset/update active commodity ID for proper back-stack navigation.
      */
     public static void onFragmentCreateViewStart(Object fragment) {
         try {
             if (fragment != null) {
+                try {
+                    Method getContextMethod = fragment.getClass().getMethod("getContext");
+                    Context ctx = (Context) getContextMethod.invoke(fragment);
+                    if (ctx != null) {
+                        setApplicationContext(ctx);
+                    }
+                } catch (Throwable ignored) {}
+
                 Object god = findGodFragment(fragment);
                 if (god != null) {
                     lastGodFragment = new WeakReference<Object>(god);
+                    // Reset stale state on back-stack navigation and actively re-resolve commodity
+                    activeCommodityId = null;
+                    activeProductName = null;
+                    sExplicitCurrency = null;
                     resolveProductFromGodFragment(god);
                 }
             }
@@ -445,12 +447,25 @@ public class AlzaPriceChartInjector {
                 androidViewOwnerClass = cl.loadClass(sAndroidViewClass);
             } catch (Throwable ignored) {}
         }
+        if (androidViewOwnerClass == null) {
+            try {
+                androidViewOwnerClass = cl.loadClass("androidx.compose.ui.viewinterop.AndroidView_androidKt");
+            } catch (Throwable ignored) {}
+        }
         if (androidViewOwnerClass != null) {
             String methodName = sAndroidViewMethod != null ? sAndroidViewMethod : "a";
             for (Method m : androidViewOwnerClass.getMethods()) {
                 if (m.getName().equals(methodName) && m.getParameterTypes().length == 6) {
                     sAndroidViewResolvedMethod = m;
                     break;
+                }
+            }
+            if (sAndroidViewResolvedMethod == null) {
+                for (Method m : androidViewOwnerClass.getMethods()) {
+                    if (m.getParameterTypes().length == 6) {
+                        sAndroidViewResolvedMethod = m;
+                        break;
+                    }
                 }
             }
         }
@@ -623,12 +638,33 @@ public class AlzaPriceChartInjector {
             Method[] methods = godFragment.getClass().getMethods();
             Object destination = null;
             for (Method m : methods) {
-                if (m.getParameterTypes().length == 0 && m.getName().length() <= 2) {
+                if (m.getParameterTypes().length == 0) {
+                    Class<?> retType = m.getReturnType();
+                    if (!retType.isPrimitive() && !retType.equals(void.class)) {
+                        String retName = retType.getName();
+                        if (retName.contains("Destination") || retName.contains("Navigation")) {
+                            try {
+                                Object res = m.invoke(godFragment);
+                                if (res != null && res.getClass().getName().contains("Destination")) {
+                                    destination = res;
+                                    break;
+                                }
+                            } catch (Throwable ignored) {}
+                        }
+                    }
+                }
+            }
+
+            if (destination == null) {
+                for (Field f : godFragment.getClass().getDeclaredFields()) {
                     try {
-                        Object res = m.invoke(godFragment);
-                        if (res != null && res.getClass().getName().contains("Destination")) {
-                            destination = res;
-                            break;
+                        if (f.getType().getName().contains("Destination")) {
+                            f.setAccessible(true);
+                            Object res = f.get(godFragment);
+                            if (res != null) {
+                                destination = res;
+                                break;
+                            }
                         }
                     } catch (Throwable ignored) {}
                 }
@@ -796,19 +832,5 @@ public class AlzaPriceChartInjector {
                     }
                 }
         );
-    }
-
-    public static void openMorpheSettings() {
-        new Handler(Looper.getMainLooper()).post(new Runnable() {
-            @Override
-            public void run() {
-                Activity act = getCurrentActivity();
-                if (act != null) {
-                    MorpheSettingsDialog.show(act, null);
-                } else {
-                    Log.w(TAG, "No foreground activity to show Morphe settings dialog");
-                }
-            }
-        });
     }
 }

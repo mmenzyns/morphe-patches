@@ -27,6 +27,7 @@ public class PriceHistoryData implements Serializable {
     private final Double claimedDiscount;
     private final List<PricePoint> currentPricePoints;
     private final List<PricePoint> originalPricePoints;
+    private volatile DiscountCalculation cachedDiscountCalculation = null;
 
     public PriceHistoryData(
             String commodityId,
@@ -124,6 +125,15 @@ public class PriceHistoryData implements Serializable {
      *    Common price (modus / most frequent price over last 90 days).
      */
     public DiscountCalculation calculateHlidacShopuDiscount() {
+        if (cachedDiscountCalculation != null) {
+            return cachedDiscountCalculation;
+        }
+        DiscountCalculation calc = doCalculateHlidacShopuDiscount();
+        cachedDiscountCalculation = calc;
+        return calc;
+    }
+
+    private DiscountCalculation doCalculateHlidacShopuDiscount() {
         if (currentPricePoints == null || currentPricePoints.size() < 2) {
             if (realDiscount != null && realDiscount > 0) {
                 return new DiscountCalculation(realDiscount, commonPrice, "z Hlídače shopů");

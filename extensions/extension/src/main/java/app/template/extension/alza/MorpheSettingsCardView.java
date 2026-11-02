@@ -17,8 +17,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 /**
- * Dedicated "Morphe" settings card view displayed inside Alza app settings
- * and inside the MorpheSettingsDialog.
+ * Dedicated "Morphe" settings card view displayed inside Alza app settings.
  */
 public class MorpheSettingsCardView extends LinearLayout {
 

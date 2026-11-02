@@ -36,15 +36,6 @@ object ProductDetailParamsWithMetaFingerprint : Fingerprint(
     )
 )
 
-object ProductPriceSectionFingerprint : Fingerprint(
-    returnType = "V",
-    isStatic = true,
-    custom = { method, _ ->
-        method.parameterTypes.size == 6 &&
-            method.parameterTypes.any { it == "Lcz/alza/base/lib/product/detail/model/general/data/ProductPrices;" }
-    }
-)
-
 object AndroidViewFingerprint : Fingerprint(
     returnType = "V",
     isStatic = true,

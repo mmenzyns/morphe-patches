@@ -59,6 +59,11 @@ public class PriceHistoryChartView extends View {
     private Path originalCurvePath = new Path();
     private RectF cardRect = new RectF();
 
+    private float lastGradTop = -1f;
+    private float lastGradBottom = -1f;
+    private boolean lastGradCompact = false;
+    private LinearGradient cachedGradient = null;
+
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("MM/yy", Locale.getDefault());
     private final DecimalFormat priceFormat;
     private final DecimalFormat euroFormat;
@@ -659,16 +664,23 @@ public class PriceHistoryChartView extends View {
         currentAreaPath.lineTo(chartRight, bottom);
         currentAreaPath.close();
 
-        // Shaded area
         int curveColor = Color.parseColor("#00A651");
-        int startGradColor = Color.argb(compact ? 60 : 75, Color.red(curveColor), Color.green(curveColor), Color.blue(curveColor));
-        int endGradColor = Color.argb(0, Color.red(curveColor), Color.green(curveColor), Color.blue(curveColor));
 
-        currentAreaPaint.setShader(new LinearGradient(
-                0, top, 0, bottom,
-                startGradColor, endGradColor,
-                Shader.TileMode.CLAMP
-        ));
+        // Shaded area - cached to avoid allocations on every frame
+        if (cachedGradient == null || lastGradTop != top || lastGradBottom != bottom || lastGradCompact != compact) {
+            int startGradColor = Color.argb(compact ? 60 : 75, Color.red(curveColor), Color.green(curveColor), Color.blue(curveColor));
+            int endGradColor = Color.argb(0, Color.red(curveColor), Color.green(curveColor), Color.blue(curveColor));
+
+            cachedGradient = new LinearGradient(
+                    0, top, 0, bottom,
+                    startGradColor, endGradColor,
+                    Shader.TileMode.CLAMP
+            );
+            lastGradTop = top;
+            lastGradBottom = bottom;
+            lastGradCompact = compact;
+            currentAreaPaint.setShader(cachedGradient);
+        }
 
         canvas.drawPath(currentAreaPath, currentAreaPaint);
 
