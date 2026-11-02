@@ -33,7 +33,7 @@ public class PriceHistoryChartView extends View {
         UNSUPPORTED_COUNTRY
     }
 
-    private State state = State.LOADING;
+    private State state = State.EMPTY;
     private PriceHistoryData data;
     private String commodityId;
     private boolean isCollapsed = false;

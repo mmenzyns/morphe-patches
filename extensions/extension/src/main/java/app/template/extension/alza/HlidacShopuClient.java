@@ -105,7 +105,28 @@ public class HlidacShopuClient {
 
                     int responseCode = conn.getResponseCode();
                     Log.i(TAG, "Hlídač shopů HTTP response code: " + responseCode);
+                    if (responseCode == HttpURLConnection.HTTP_NOT_FOUND) {
+                        final PriceHistoryData emptyData = new PriceHistoryData(
+                                commodityId,
+                                productName,
+                                identifier,
+                                null, null, null, null, null, null,
+                                null, null
+                        );
+                        cache.put(cacheKey, emptyData);
+                        mainHandler.post(new Runnable() {
+                            @Override
+                            public void run() {
+                                if (callback != null) {
+                                    callback.onSuccess(emptyData);
+                                }
+                            }
+                        });
+                        conn.disconnect();
+                        return;
+                    }
                     if (responseCode != HttpURLConnection.HTTP_OK) {
+                        conn.disconnect();
                         throw new Exception("HTTP error code: " + responseCode);
                     }
 

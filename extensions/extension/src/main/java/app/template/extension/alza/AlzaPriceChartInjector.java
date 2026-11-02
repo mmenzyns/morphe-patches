@@ -266,12 +266,67 @@ public class AlzaPriceChartInjector {
     public static Object filterAlternativePrice(Object productPrices, Object originalAltPrice) {
         if (productPrices != null) {
             detectMarketFromPrices(productPrices);
+            extractCommodityFromPrices(productPrices);
         }
         if (isCompactMode()) {
             Log.i(TAG, "filterAlternativePrice: Compact mode active -> eliminating HomeCredit (returning null)");
             return null;
         }
         return originalAltPrice;
+    }
+
+    public static void extractCommodityFromPrices(Object productPrices) {
+        if (productPrices == null) return;
+        try {
+            for (Method m : productPrices.getClass().getMethods()) {
+                if (m.getParameterTypes().length == 0) {
+                    String mname = m.getName().toLowerCase();
+                    if (mname.contains("productid") || mname.contains("commodityid") || mname.equals("getid")) {
+                        try {
+                            Object res = m.invoke(productPrices);
+                            if (res instanceof Number && ((Number) res).intValue() > 0) {
+                                String id = String.valueOf(((Number) res).intValue());
+                                if (activeCommodityId == null || !activeCommodityId.equals(id)) {
+                                    activeCommodityId = id;
+                                    Log.i(TAG, "extractCommodityFromPrices: captured id=" + id + " from method " + m.getName());
+                                }
+                                return;
+                            }
+                        } catch (Throwable ignored) {}
+                    }
+                }
+            }
+
+            for (Field f : productPrices.getClass().getDeclaredFields()) {
+                try {
+                    f.setAccessible(true);
+                    String fname = f.getName().toLowerCase();
+                    if (fname.contains("productid") || fname.contains("commodityid") || fname.equals("id") || fname.equals("a")) {
+                        Object val = f.get(productPrices);
+                        if (val instanceof Number && ((Number) val).intValue() > 0) {
+                            String id = String.valueOf(((Number) val).intValue());
+                            if (activeCommodityId == null || !activeCommodityId.equals(id)) {
+                                activeCommodityId = id;
+                                Log.i(TAG, "extractCommodityFromPrices: captured id=" + id + " from field " + f.getName());
+                            }
+                            return;
+                        }
+                    }
+                } catch (Throwable ignored) {}
+            }
+
+            String str = productPrices.toString();
+            java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(?:productId=|-d|commodityId=|id=)([0-9]{4,9})").matcher(str);
+            if (matcher.find()) {
+                String id = matcher.group(1);
+                if (activeCommodityId == null || !activeCommodityId.equals(id)) {
+                    activeCommodityId = id;
+                    Log.i(TAG, "extractCommodityFromPrices: captured id=" + id + " from toString");
+                }
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "extractCommodityFromPrices error: " + t.getMessage());
+        }
     }
 
     public static void detectMarketFromPrices(Object productPrices) {
@@ -368,7 +423,7 @@ public class AlzaPriceChartInjector {
                     Object href = mh.invoke(meta);
                     if (href != null) {
                         String hrefStr = href.toString();
-                        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(?:/product/|productId=|-d)([0-9]+)").matcher(hrefStr);
+                        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(?:/product/|productId=|-d|d)([0-9]{4,9})").matcher(hrefStr);
                         if (matcher.find()) {
                             String newId = matcher.group(1);
                             if (!newId.equals(activeCommodityId)) {
@@ -430,10 +485,6 @@ public class AlzaPriceChartInjector {
                 Object god = findGodFragment(fragment);
                 if (god != null) {
                     lastGodFragment = new WeakReference<Object>(god);
-                    // Reset stale state on back-stack navigation and actively re-resolve commodity
-                    activeCommodityId = null;
-                    activeProductName = null;
-                    sExplicitCurrency = null;
                     resolveProductFromGodFragment(god);
                 }
             }
@@ -563,7 +614,7 @@ public class AlzaPriceChartInjector {
                                     chartView.setTag(CHART_VIEW_TAG);
 
                                     if (activeCommodityId == null || activeCommodityId.isEmpty()) {
-                                        resolveProductFromGodFragment(lastGodFragment.get());
+                                        resolveProductFromGodFragment(lastGodFragment != null ? lastGodFragment.get() : null);
                                     }
 
                                     String commodityId = activeCommodityId;
@@ -571,6 +622,8 @@ public class AlzaPriceChartInjector {
                                     if (commodityId != null && !commodityId.isEmpty() && !commodityId.equals("0")) {
                                         chartView.setCommodityId(commodityId);
                                         fetchData(chartView, commodityId, null, productName);
+                                    } else {
+                                        chartView.setState(PriceHistoryChartView.State.EMPTY);
                                     }
                                     Log.i(TAG, "Compose AndroidView factory: created native inline PriceHistoryChartView for " + commodityId);
                                     return chartView;
@@ -600,7 +653,7 @@ public class AlzaPriceChartInjector {
                                         setApplicationContext(chartView.getContext());
 
                                         if (activeCommodityId == null || activeCommodityId.isEmpty()) {
-                                            resolveProductFromGodFragment(lastGodFragment.get());
+                                            resolveProductFromGodFragment(lastGodFragment != null ? lastGodFragment.get() : null);
                                         }
                                         String commodityId = activeCommodityId;
                                         if (commodityId != null && !commodityId.isEmpty() && !commodityId.equals("0")) {
@@ -640,39 +693,99 @@ public class AlzaPriceChartInjector {
     private static void resolveProductFromGodFragment(Object godFragment) {
         if (godFragment == null) return;
         try {
-            Method[] methods = godFragment.getClass().getMethods();
             Object destination = null;
-            for (Method m : methods) {
-                if (m.getParameterTypes().length == 0) {
-                    Class<?> retType = m.getReturnType();
-                    if (!retType.isPrimitive() && !retType.equals(void.class)) {
-                        String retName = retType.getName();
-                        if (retName.contains("Destination") || retName.contains("Navigation")) {
-                            try {
-                                Object res = m.invoke(godFragment);
-                                if (res != null && res.getClass().getName().contains("Destination")) {
-                                    destination = res;
-                                    break;
-                                }
-                            } catch (Throwable ignored) {}
+
+            // 1. Try method U() (known Alza destination getter on GodFragment)
+            try {
+                Method mU = godFragment.getClass().getMethod("U");
+                if (mU.getParameterTypes().length == 0) {
+                    destination = mU.invoke(godFragment);
+                }
+            } catch (Throwable ignored) {}
+
+            if (destination == null) {
+                try {
+                    Method mU = godFragment.getClass().getDeclaredMethod("U");
+                    if (mU.getParameterTypes().length == 0) {
+                        mU.setAccessible(true);
+                        destination = mU.invoke(godFragment);
+                    }
+                } catch (Throwable ignored) {}
+            }
+
+            // 2. Try zero-argument methods on GodFragment returning non-framework objects
+            if (destination == null) {
+                for (Method m : godFragment.getClass().getMethods()) {
+                    if (m.getParameterTypes().length == 0) {
+                        Class<?> retType = m.getReturnType();
+                        if (!retType.isPrimitive() && !retType.equals(void.class)) {
+                            String retName = retType.getName();
+                            if (!retName.startsWith("android.") && !retName.startsWith("java.") && !retName.startsWith("androidx.")) {
+                                try {
+                                    Object res = m.invoke(godFragment);
+                                    if (res != null) {
+                                        String resName = res.getClass().getName();
+                                        if (resName.contains("Destination") || resName.contains("Navigation") || extractProductParams(res) != null) {
+                                            destination = res;
+                                            break;
+                                        }
+                                    }
+                                } catch (Throwable ignored) {}
+                            }
                         }
                     }
                 }
             }
 
+            // 3. Try fields of GodFragment
             if (destination == null) {
                 for (Field f : godFragment.getClass().getDeclaredFields()) {
                     try {
-                        if (f.getType().getName().contains("Destination")) {
+                        String fTypeName = f.getType().getName();
+                        if (!fTypeName.startsWith("android.") && !fTypeName.startsWith("java.") && !fTypeName.startsWith("androidx.")) {
                             f.setAccessible(true);
                             Object res = f.get(godFragment);
                             if (res != null) {
-                                destination = res;
-                                break;
+                                String resName = res.getClass().getName();
+                                if (resName.contains("Destination") || resName.contains("Navigation") || extractProductParams(res) != null) {
+                                    destination = res;
+                                    break;
+                                }
                             }
                         }
                     } catch (Throwable ignored) {}
                 }
+            }
+
+            // 4. Try Fragment getArguments() Bundle
+            if (destination == null) {
+                try {
+                    Method getArgsMethod = godFragment.getClass().getMethod("getArguments");
+                    Object args = getArgsMethod.invoke(godFragment);
+                    if (args instanceof Bundle) {
+                        Bundle bundle = (Bundle) args;
+                        for (String key : bundle.keySet()) {
+                            Object val = bundle.get(key);
+                            if (val != null) {
+                                Object params = extractProductParams(val);
+                                String cid = extractCommodityId(params, val);
+                                if (cid != null && !cid.isEmpty() && !cid.equals("0")) {
+                                    activeCommodityId = cid;
+                                    String pname = extractProductName(params);
+                                    if (pname != null) activeProductName = pname;
+                                    Log.i(TAG, "resolveProductFromGodFragment from Bundle key=" + key + ": id=" + cid);
+                                    return;
+                                }
+                            }
+                        }
+                        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(?:/product/|productId=|-d|d=)([0-9]{4,9})").matcher(bundle.toString());
+                        if (matcher.find()) {
+                            activeCommodityId = matcher.group(1);
+                            Log.i(TAG, "resolveProductFromGodFragment from Bundle regex: id=" + activeCommodityId);
+                            return;
+                        }
+                    }
+                } catch (Throwable ignored) {}
             }
 
             if (destination != null) {
@@ -681,7 +794,9 @@ public class AlzaPriceChartInjector {
                 String productName = extractProductName(params);
                 if (commodityId != null && !commodityId.isEmpty() && !commodityId.equals("0")) {
                     activeCommodityId = commodityId;
-                    activeProductName = productName;
+                    if (productName != null) {
+                        activeProductName = productName;
+                    }
                     Log.i(TAG, "resolveProductFromGodFragment: id=" + commodityId + ", name=" + productName);
                 }
             }
@@ -710,6 +825,10 @@ public class AlzaPriceChartInjector {
 
     private static Object extractProductParams(Object destination) {
         if (destination == null) return null;
+        if (destination.getClass().getName().contains("ProductDetailParams")) {
+            return destination;
+        }
+
         try {
             Field fa = destination.getClass().getField("a");
             Object val = fa.get(destination);
@@ -720,18 +839,25 @@ public class AlzaPriceChartInjector {
             try {
                 f.setAccessible(true);
                 Object val = f.get(destination);
-                if (val != null && val.getClass().getName().contains("ProductDetailParams")) {
-                    return val;
+                if (val != null) {
+                    String vName = val.getClass().getName();
+                    if (vName.contains("ProductDetailParams") || vName.contains("Params")) {
+                        return val;
+                    }
                 }
             } catch (Throwable ignored) {}
         }
 
         for (Method m : destination.getClass().getDeclaredMethods()) {
             try {
-                if (m.getParameterTypes().length == 0 && m.getReturnType().getName().contains("ProductDetailParams")) {
-                    m.setAccessible(true);
-                    Object val = m.invoke(destination);
-                    if (val != null) return val;
+                if (m.getParameterTypes().length == 0) {
+                    Class<?> rType = m.getReturnType();
+                    String rName = rType.getName();
+                    if (rName.contains("ProductDetailParams") || rName.contains("Params")) {
+                        m.setAccessible(true);
+                        Object val = m.invoke(destination);
+                        if (val != null) return val;
+                    }
                 }
             } catch (Throwable ignored) {}
         }
@@ -752,7 +878,8 @@ public class AlzaPriceChartInjector {
             for (Field f : params.getClass().getDeclaredFields()) {
                 try {
                     f.setAccessible(true);
-                    if (f.getName().equalsIgnoreCase("productId") || f.getName().equalsIgnoreCase("id")) {
+                    String fname = f.getName().toLowerCase();
+                    if (fname.equals("productid") || fname.equals("id") || fname.equals("commodityid") || fname.equals("a")) {
                         Object val = f.get(params);
                         if (val instanceof Number && ((Number) val).intValue() > 0) {
                             return String.valueOf(((Number) val).intValue());
@@ -769,11 +896,19 @@ public class AlzaPriceChartInjector {
                     Object href = mh.invoke(meta);
                     if (href != null) {
                         String hrefStr = href.toString();
-                        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(?:/product/|productId=|-d)([0-9]+)").matcher(hrefStr);
+                        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(?:/product/|productId=|-d|d)([0-9]{4,9})").matcher(hrefStr);
                         if (matcher.find()) {
                             return matcher.group(1);
                         }
                     }
+                }
+            } catch (Throwable ignored) {}
+
+            try {
+                String paramsStr = params.toString();
+                java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(?:/product/|productId=|-d|d)([0-9]{4,9})").matcher(paramsStr);
+                if (matcher.find()) {
+                    return matcher.group(1);
                 }
             } catch (Throwable ignored) {}
         }
@@ -781,7 +916,7 @@ public class AlzaPriceChartInjector {
         if (destination != null) {
             try {
                 String destStr = destination.toString();
-                java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(?:/product/|productId=|-d)([0-9]+)").matcher(destStr);
+                java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(?:/product/|productId=|-d|d)([0-9]{4,9})").matcher(destStr);
                 if (matcher.find()) {
                     return matcher.group(1);
                 }
@@ -811,12 +946,19 @@ public class AlzaPriceChartInjector {
             final String identifier,
             final String productName
     ) {
+        if (commodityId == null || commodityId.trim().isEmpty() || commodityId.equals("0")) {
+            chartView.setState(PriceHistoryChartView.State.EMPTY);
+            return;
+        }
+
         String domain = getDetectedDomain();
         Log.i(TAG, "fetchData: requesting data for commodityId=" + commodityId + " (domain=" + domain + ", currency=" + getDetectedCurrency() + ")");
         if (!sIsCountrySupported) {
             chartView.setState(PriceHistoryChartView.State.UNSUPPORTED_COUNTRY);
             return;
         }
+
+        chartView.setState(PriceHistoryChartView.State.LOADING);
 
         HlidacShopuClient.getInstance().fetchPriceHistory(
                 commodityId,
