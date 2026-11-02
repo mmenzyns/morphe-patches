@@ -425,39 +425,11 @@ public class PriceHistoryChartView extends View {
             }
             discountValuePaint.setTextSize(dpToPx(compact ? 12f : 13.5f));
             canvas.drawText(valStr, headerLeft + labelWidth, discountRowY, discountValuePaint);
-            float valWidth = discountValuePaint.measureText(valStr);
-
-            // Subtitle note
-            if (!compact) {
-                StringBuilder noteSb = new StringBuilder();
-                if (data.getClaimedDiscount() != null && data.getClaimedDiscount() > 0) {
-                    noteSb.append("Alza uvádí -").append(Math.round(data.getClaimedDiscount())).append(" %");
-                    if (calc != null && calc.realDiscountPercent <= 0) {
-                        noteSb.append(" (klamavá)");
-                    }
-                }
-
-                if (calc != null && calc.methodologyNote != null && !calc.methodologyNote.isEmpty()) {
-                    if (noteSb.length() > 0) {
-                        noteSb.append("  •  ");
-                    }
-                    noteSb.append(calc.methodologyNote);
-                }
-
-                if (noteSb.length() > 0) {
-                    float noteX = headerLeft + labelWidth + valWidth + dpToPx(10f);
-                    if (noteX + subtitlePaint.measureText(noteSb.toString()) < (width - paddingPx - dpToPx(8f))) {
-                        canvas.drawText(noteSb.toString(), noteX, discountRowY, subtitlePaint);
-                    } else {
-                        canvas.drawText(noteSb.toString(), headerLeft, discountRowY + dpToPx(14f), subtitlePaint);
-                    }
-                }
-            }
         }
 
         // 5. Plot Area
         float plotLeft = headerLeft;
-        float plotTop = headerTop + dpToPx(compact ? 24f : 36f);
+        float plotTop = headerTop + dpToPx(compact ? 24f : 28f);
         float plotRight = width - paddingPx - dpToPx(4f);
         float plotBottom = height - paddingPx - dpToPx(compact ? 8f : 14f);
 
