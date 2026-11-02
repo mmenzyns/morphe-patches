@@ -1,3 +1,9 @@
+## [1.6.0](https://github.com/mmenzyns/morphe-patches/compare/v1.5.0...v1.6.0) (2026-11-02)
+
+### ✨ New Features
+
+* **alza:** move settings to Menu, fix compact mode replacing HomeCredit, remove in-app warnings and update CZ/SK metadata ([12549d2](https://github.com/mmenzyns/morphe-patches/commit/12549d2f2f292a6b7bb5973cb2dea5988246a3f9))
+
 ## [1.5.0](https://github.com/mmenzyns/morphe-patches/compare/v1.4.1...v1.5.0) (2026-11-02)
 
 ### ✨ New Features

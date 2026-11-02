@@ -1,10 +1,10 @@
 {
   "NOTE": "Do NOT manually edit this file. This file is automatically updated when semantic release (release.yml) runs. Manually editing this file can break your releases and break third party tools that use this file.",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "patches": [
     {
-      "name": "Alza Hlídač shopů Price History",
-      "description": "Displays inline price history chart from Hlídač shopů in product detail screen (CZ/SK) with Compact mode and Settings.",
+      "name": "Alza Hlídač shopů Price History (CZ / SK)",
+      "description": "Displays inline price history chart from Hlídač shopů in product detail screen for Czech Republic and Slovakia (alza.cz / alza.sk). Includes compact mode replacing HomeCredit installments and settings in Menu.",
       "default": true,
       "category": null,
       "compatiblePackages": [
