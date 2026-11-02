@@ -2,6 +2,9 @@ package app.template.extension.alza;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.content.res.Configuration;
+import android.content.res.Resources;
+import android.os.Build;
 import android.util.Log;
 
 import java.lang.ref.WeakReference;
@@ -9,6 +12,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.util.Locale;
 
 public class AlzaPriceChartInjector {
     private static final String TAG = "MorpheAlza";
@@ -21,9 +25,10 @@ public class AlzaPriceChartInjector {
     private static volatile Context sAppContext = null;
     private static volatile Boolean sCompactModeCache = null;
 
-    // Market / Country detection (defaults to CZ)
-    private static volatile String sDetectedDomain = "alza.cz";
-    private static volatile String sDetectedCurrency = "Kč";
+    // Market / Country detection
+    private static volatile String sExplicitCurrency = null;
+    private static volatile String sDetectedDomain = null;
+    private static volatile String sDetectedCurrency = null;
     private static volatile boolean sIsCountrySupported = true;
     private static volatile Field sAlternativePriceField = null;
 
@@ -57,9 +62,67 @@ public class AlzaPriceChartInjector {
     }
 
     public static void setApplicationContext(Context context) {
-        if (context != null && sAppContext == null) {
-            sAppContext = context.getApplicationContext();
+        if (context != null) {
+            if (sAppContext == null) {
+                sAppContext = context.getApplicationContext() != null ? context.getApplicationContext() : context;
+            }
+            if (isSlovakLocale(context)) {
+                if (sExplicitCurrency == null) {
+                    sDetectedDomain = "alza.sk";
+                    sDetectedCurrency = "€";
+                    sIsCountrySupported = true;
+                }
+            }
         }
+    }
+
+    public static boolean isSlovak() {
+        return isSlovak(sAppContext);
+    }
+
+    public static boolean isSlovak(Context context) {
+        if ("€".equals(sExplicitCurrency)) {
+            return true;
+        }
+        if ("Kč".equals(sExplicitCurrency) || "Ft".equals(sExplicitCurrency)) {
+            return false;
+        }
+        return isSlovakLocale(context != null ? context : sAppContext);
+    }
+
+    public static boolean isSlovakLocale(Context context) {
+        if (context != null) {
+            try {
+                Resources res = context.getResources();
+                if (res != null) {
+                    Configuration conf = res.getConfiguration();
+                    if (conf != null) {
+                        Locale loc = null;
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && conf.getLocales() != null && !conf.getLocales().isEmpty()) {
+                            loc = conf.getLocales().get(0);
+                        } else {
+                            loc = conf.locale;
+                        }
+                        if (loc != null) {
+                            String lang = loc.getLanguage();
+                            String country = loc.getCountry();
+                            if ("sk".equalsIgnoreCase(lang) || "SK".equalsIgnoreCase(country)) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            } catch (Throwable ignored) {}
+        }
+        try {
+            Locale def = Locale.getDefault();
+            if (def != null) {
+                if ("sk".equalsIgnoreCase(def.getLanguage()) || "SK".equalsIgnoreCase(def.getCountry())) {
+                    return true;
+                }
+            }
+        } catch (Throwable ignored) {}
+        return false;
     }
 
     /**
@@ -98,10 +161,28 @@ public class AlzaPriceChartInjector {
     }
 
     public static String getDetectedDomain() {
+        if ("alza.sk".equalsIgnoreCase(sDetectedDomain) || "€".equals(sExplicitCurrency)) {
+            return "alza.sk";
+        }
+        if ("alza.hu".equalsIgnoreCase(sDetectedDomain) || "Ft".equals(sExplicitCurrency)) {
+            return "alza.hu";
+        }
+        if (isSlovak()) {
+            return "alza.sk";
+        }
         return sDetectedDomain != null ? sDetectedDomain : "alza.cz";
     }
 
     public static String getDetectedCurrency() {
+        if ("€".equals(sExplicitCurrency) || "alza.sk".equalsIgnoreCase(sDetectedDomain)) {
+            return "€";
+        }
+        if ("Ft".equals(sExplicitCurrency) || "alza.hu".equalsIgnoreCase(sDetectedDomain)) {
+            return "Ft";
+        }
+        if (isSlovak()) {
+            return "€";
+        }
         return sDetectedCurrency != null ? sDetectedCurrency : "Kč";
     }
 
@@ -141,23 +222,68 @@ public class AlzaPriceChartInjector {
     }
 
     public static void detectMarketFromPrices(Object productPrices) {
+        if (productPrices == null) return;
         try {
+            String str = productPrices.toString();
+            if (str.contains("€")) {
+                sExplicitCurrency = "€";
+                sDetectedCurrency = "€";
+                sDetectedDomain = "alza.sk";
+                sIsCountrySupported = true;
+                return;
+            } else if (str.contains("Kč") || str.contains("Kc")) {
+                sExplicitCurrency = "Kč";
+                sDetectedCurrency = "Kč";
+                sDetectedDomain = "alza.cz";
+                sIsCountrySupported = true;
+                return;
+            } else if (str.contains("Ft") || str.contains("HUF")) {
+                sExplicitCurrency = "Ft";
+                sDetectedCurrency = "Ft";
+                sDetectedDomain = "alza.hu";
+                sIsCountrySupported = false;
+                return;
+            }
+
             Method mGetPrice = productPrices.getClass().getMethod("getPrice");
             Object priceObj = mGetPrice.invoke(productPrices);
             if (priceObj != null) {
+                String pStr = priceObj.toString();
+                if (pStr.contains("€")) {
+                    sExplicitCurrency = "€";
+                    sDetectedCurrency = "€";
+                    sDetectedDomain = "alza.sk";
+                    sIsCountrySupported = true;
+                    return;
+                } else if (pStr.contains("Kč") || pStr.contains("Kc")) {
+                    sExplicitCurrency = "Kč";
+                    sDetectedCurrency = "Kč";
+                    sDetectedDomain = "alza.cz";
+                    sIsCountrySupported = true;
+                    return;
+                } else if (pStr.contains("Ft") || pStr.contains("HUF")) {
+                    sExplicitCurrency = "Ft";
+                    sDetectedCurrency = "Ft";
+                    sDetectedDomain = "alza.hu";
+                    sIsCountrySupported = false;
+                    return;
+                }
+
                 Method mPrimary = priceObj.getClass().getMethod("getPrimaryPrice");
                 Object primary = mPrimary.invoke(priceObj);
                 String primaryStr = primary != null ? primary.toString() : "";
-
                 if (primaryStr.contains("€")) {
+                    sExplicitCurrency = "€";
                     sDetectedCurrency = "€";
                     sDetectedDomain = "alza.sk";
                     sIsCountrySupported = true;
                 } else if (primaryStr.contains("Kč") || primaryStr.contains("Kc")) {
+                    sExplicitCurrency = "Kč";
                     sDetectedCurrency = "Kč";
                     sDetectedDomain = "alza.cz";
                     sIsCountrySupported = true;
                 } else if (primaryStr.contains("Ft") || primaryStr.contains("HUF")) {
+                    sExplicitCurrency = "Ft";
                     sDetectedCurrency = "Ft";
                     sDetectedDomain = "alza.hu";
                     sIsCountrySupported = false;
@@ -172,7 +298,11 @@ public class AlzaPriceChartInjector {
     public static void onProductDetailParams(int productId, Object productInfo) {
         try {
             if (productId > 0) {
-                activeCommodityId = String.valueOf(productId);
+                String newId = String.valueOf(productId);
+                if (!newId.equals(activeCommodityId)) {
+                    sExplicitCurrency = null;
+                }
+                activeCommodityId = newId;
                 if (productInfo != null) {
                     try {
                         Method m = productInfo.getClass().getMethod("getName");
@@ -202,13 +332,19 @@ public class AlzaPriceChartInjector {
                         String hrefStr = href.toString();
                         java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(?:/product/|productId=|-d)([0-9]+)").matcher(hrefStr);
                         if (matcher.find()) {
-                            activeCommodityId = matcher.group(1);
+                            String newId = matcher.group(1);
+                            if (!newId.equals(activeCommodityId)) {
+                                sExplicitCurrency = null;
+                            }
+                            activeCommodityId = newId;
                         }
                         if (hrefStr.contains(".sk") || hrefStr.contains("/sk/")) {
+                            sExplicitCurrency = "€";
                             sDetectedDomain = "alza.sk";
                             sDetectedCurrency = "€";
                             sIsCountrySupported = true;
                         } else if (hrefStr.contains(".cz") || hrefStr.contains("/cz/")) {
+                            sExplicitCurrency = "Kč";
                             sDetectedDomain = "alza.cz";
                             sDetectedCurrency = "Kč";
                             sIsCountrySupported = true;
@@ -219,7 +355,9 @@ public class AlzaPriceChartInjector {
                             sDetectedDomain = "alza.at";
                             sIsCountrySupported = false;
                         } else if (hrefStr.contains(".hu") || hrefStr.contains("/hu/")) {
+                            sExplicitCurrency = "Ft";
                             sDetectedDomain = "alza.hu";
+                            sDetectedCurrency = "Ft";
                             sIsCountrySupported = false;
                         }
                     }
@@ -592,7 +730,8 @@ public class AlzaPriceChartInjector {
             final String identifier,
             final String productName
     ) {
-        Log.i(TAG, "fetchData: requesting data for commodityId=" + commodityId + " (domain=" + sDetectedDomain + ")");
+        String domain = getDetectedDomain();
+        Log.i(TAG, "fetchData: requesting data for commodityId=" + commodityId + " (domain=" + domain + ", currency=" + getDetectedCurrency() + ")");
         if (!sIsCountrySupported) {
             chartView.setState(PriceHistoryChartView.State.UNSUPPORTED_COUNTRY);
             return;

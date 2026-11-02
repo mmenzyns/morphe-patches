@@ -64,30 +64,35 @@ public class PriceHistoryChartView extends View {
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("MM/yy", Locale.getDefault());
     private final DecimalFormat priceFormat;
     private final DecimalFormat euroFormat;
+    private final DecimalFormat euroFormatRound;
 
     private float paddingPx;
     private float cornerRadiusPx;
 
     public PriceHistoryChartView(Context context) {
         super(context);
-        priceFormat = initPriceFormat(false);
-        euroFormat = initPriceFormat(true);
+        priceFormat = initPriceFormat(0);
+        euroFormat = initPriceFormat(1);
+        euroFormatRound = initPriceFormat(2);
         init();
     }
 
     public PriceHistoryChartView(Context context, AttributeSet attrs) {
         super(context, attrs);
-        priceFormat = initPriceFormat(false);
-        euroFormat = initPriceFormat(true);
+        priceFormat = initPriceFormat(0);
+        euroFormat = initPriceFormat(1);
+        euroFormatRound = initPriceFormat(2);
         init();
     }
 
-    private DecimalFormat initPriceFormat(boolean isEuro) {
+    private DecimalFormat initPriceFormat(int type) {
         DecimalFormatSymbols symbols = new DecimalFormatSymbols(Locale.getDefault());
         symbols.setGroupingSeparator(' ');
         symbols.setDecimalSeparator(',');
-        if (isEuro) {
-            return new DecimalFormat("#,##0.##", symbols);
+        if (type == 1) {
+            return new DecimalFormat("#,##0.00", symbols);
+        } else if (type == 2) {
+            return new DecimalFormat("#,##0", symbols);
         }
         return new DecimalFormat("#,###", symbols);
     }
@@ -294,6 +299,9 @@ public class PriceHistoryChartView extends View {
     private String formatPrice(double price) {
         String currency = AlzaPriceChartInjector.getDetectedCurrency();
         if ("€".equals(currency)) {
+            if (price == Math.floor(price)) {
+                return euroFormatRound.format(price) + " €";
+            }
             return euroFormat.format(price) + " €";
         }
         return priceFormat.format(price) + " " + currency;
@@ -340,6 +348,7 @@ public class PriceHistoryChartView extends View {
 
     private void drawCollapsedState(Canvas canvas, int width, int height, boolean dark) {
         float midY = height / 2f;
+        boolean sk = AlzaPriceChartInjector.isSlovak(getContext());
 
         // 1. Hlídač shopů Logo
         float logoHeight = dpToPx(13.5f);
@@ -356,16 +365,17 @@ public class PriceHistoryChartView extends View {
         // 2. Skutečná sleva or country notice
         if (state == State.UNSUPPORTED_COUNTRY) {
             discountValuePaint.setColor(Color.parseColor("#9CA3AF"));
-            canvas.drawText("Pouze CZ a SK", curX, midY + dpToPx(4.5f), discountValuePaint);
+            canvas.drawText(sk ? "Iba CZ a SK" : "Pouze CZ a SK", curX, midY + dpToPx(4.5f), discountValuePaint);
         } else if (data != null) {
             PriceHistoryData.DiscountCalculation calc = data.calculateHlidacShopuDiscount();
+            String discountPrefix = sk ? "Skutočná zľava: " : "Skutečná sleva: ";
             String discountText;
             if (calc != null && calc.realDiscountPercent > 0) {
                 discountValuePaint.setColor(Color.parseColor("#00A651")); // Green
-                discountText = "Skutečná sleva: -" + Math.round(calc.realDiscountPercent) + " %";
+                discountText = discountPrefix + "-" + Math.round(calc.realDiscountPercent) + " %";
             } else {
                 discountValuePaint.setColor(Color.parseColor("#9CA3AF")); // Neutral
-                discountText = "Skutečná sleva: 0 %";
+                discountText = discountPrefix + "0 %";
             }
             canvas.drawText(discountText, curX, midY + dpToPx(4.5f), discountValuePaint);
         }
@@ -381,6 +391,7 @@ public class PriceHistoryChartView extends View {
 
     private void drawExpandedState(Canvas canvas, int width, int height, boolean dark) {
         boolean compact = AlzaPriceChartInjector.isCompactMode();
+        boolean sk = AlzaPriceChartInjector.isSlovak(getContext());
 
         float headerLeft = paddingPx + dpToPx(4f);
         float headerTop = paddingPx + dpToPx(compact ? 11f : 14f);
@@ -393,25 +404,26 @@ public class PriceHistoryChartView extends View {
         float badgeLeft = headerLeft + HlidacLogo.getScaledWidth(logoHeight) + dpToPx(8f);
         drawMarketBadge(canvas, badgeLeft, headerTop - dpToPx(compact ? 10f : 11f), dark);
 
-        // 3. Controls on the right: "⚙" and "▼ Sbalit"
+        // 3. Controls on the right: "⚙" and "▼ Sbalit" / "▼ Zbaliť"
         float gearX = width - paddingPx - dpToPx(68f);
         canvas.drawText("⚙", gearX, headerTop - dpToPx(0.5f), gearTextPaint);
 
         float toggleX = width - paddingPx - dpToPx(45f);
-        canvas.drawText("▼ Sbalit", toggleX, headerTop - dpToPx(0.5f), toggleTextPaint);
+        canvas.drawText(sk ? "▼ Zbaliť" : "▼ Sbalit", toggleX, headerTop - dpToPx(0.5f), toggleTextPaint);
 
-        // 4. SKUTEČNÁ SLEVA
+        // 4. SKUTEČNÁ / SKUTOČNÁ ZĽAVA
         float discountRowY = headerTop + dpToPx(compact ? 13f : 16f);
         if (state == State.UNSUPPORTED_COUNTRY) {
             discountValuePaint.setColor(Color.parseColor("#9CA3AF"));
-            canvas.drawText("Hlídač shopů sleduje pouze české a slovenské obchody", headerLeft, discountRowY, subtitlePaint);
+            canvas.drawText(sk ? "Hlídač shopov sleduje iba české a slovenské obchody" : "Hlídač shopů sleduje pouze české a slovenské obchody", headerLeft, discountRowY, subtitlePaint);
         } else if (state == State.LOADED && data != null) {
             PriceHistoryData.DiscountCalculation calc = data.calculateHlidacShopuDiscount();
 
-            // "Skutečná sleva: "
+            // "Skutečná sleva: " / "Skutočná zľava: "
+            String discountPrefix = sk ? "Skutočná zľava: " : "Skutečná sleva: ";
             discountLabelPaint.setTextSize(dpToPx(compact ? 11f : 12f));
-            canvas.drawText("Skutečná sleva: ", headerLeft, discountRowY, discountLabelPaint);
-            float labelWidth = discountLabelPaint.measureText("Skutečná sleva: ");
+            canvas.drawText(discountPrefix, headerLeft, discountRowY, discountLabelPaint);
+            float labelWidth = discountLabelPaint.measureText(discountPrefix);
 
             // Value: "-XX %" or "0 %"
             String valStr;
@@ -435,16 +447,16 @@ public class PriceHistoryChartView extends View {
 
         switch (state) {
             case LOADING:
-                drawCenteredText(canvas, "Načítám historii cen z Hlídače shopů...", plotLeft, plotTop, plotRight, plotBottom, subtitlePaint);
+                drawCenteredText(canvas, sk ? "Načítavam históriu cien z Hlídača shopov..." : "Načítám historii cen z Hlídače shopů...", plotLeft, plotTop, plotRight, plotBottom, subtitlePaint);
                 break;
             case EMPTY:
-                drawCenteredText(canvas, "Historie cen pro tento produkt není k dispozici", plotLeft, plotTop, plotRight, plotBottom, subtitlePaint);
+                drawCenteredText(canvas, sk ? "História cien pre tento produkt nie je k dispozícii" : "Historie cen pro tento produkt není k dispozici", plotLeft, plotTop, plotRight, plotBottom, subtitlePaint);
                 break;
             case ERROR:
-                drawCenteredText(canvas, "Data o historii cen se nepodařilo načíst", plotLeft, plotTop, plotRight, plotBottom, subtitlePaint);
+                drawCenteredText(canvas, sk ? "Údaje o histórii cien sa nepodarilo načítať" : "Data o historii cen se nepodařilo načíst", plotLeft, plotTop, plotRight, plotBottom, subtitlePaint);
                 break;
             case UNSUPPORTED_COUNTRY:
-                drawCenteredText(canvas, "Hlídač shopů podporuje výhradně CZ a SK trh", plotLeft, plotTop, plotRight, plotBottom, subtitlePaint);
+                drawCenteredText(canvas, sk ? "Hlídač shopov podporuje výhradne CZ a SK trh" : "Hlídač shopů podporuje výhradně CZ a SK trh", plotLeft, plotTop, plotRight, plotBottom, subtitlePaint);
                 break;
             case LOADED:
                 drawChart(canvas, plotLeft, plotTop, plotRight, plotBottom, compact);

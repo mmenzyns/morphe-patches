@@ -36,6 +36,7 @@ public class MorpheSettingsCardView extends LinearLayout {
         setOrientation(LinearLayout.VERTICAL);
 
         boolean dark = isDarkMode(context);
+        final boolean sk = AlzaPriceChartInjector.isSlovak(context);
 
         int bgColor = dark ? Color.parseColor("#181824") : Color.parseColor("#FFFFFF");
         int borderColor = dark ? Color.parseColor("#2E2E3E") : Color.parseColor("#E5E7EB");
@@ -64,7 +65,7 @@ public class MorpheSettingsCardView extends LinearLayout {
         cardLp.setMargins(marginH, marginV, marginH, marginV);
         setLayoutParams(cardLp);
 
-        // 1. Header: "Morphe – Rozšíření Alza" + "CZ / SK" badge
+        // 1. Header: "Morphe – Hlídač shopů" + "CZ / SK" badge
         LinearLayout headerRow = new LinearLayout(context);
         headerRow.setOrientation(LinearLayout.HORIZONTAL);
         headerRow.setGravity(Gravity.CENTER_VERTICAL);
@@ -75,7 +76,7 @@ public class MorpheSettingsCardView extends LinearLayout {
         headerRow.setLayoutParams(headerLp);
 
         TextView titleView = new TextView(context);
-        titleView.setText("Morphe – Hlídač shopů");
+        titleView.setText(sk ? "Morphe – Hlídač shopov" : "Morphe – Hlídač shopů");
         titleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f);
         titleView.setTypeface(Typeface.DEFAULT_BOLD);
         titleView.setTextColor(brandGreen);
@@ -125,14 +126,14 @@ public class MorpheSettingsCardView extends LinearLayout {
         textCol.setLayoutParams(textColLp);
 
         TextView switchTitle = new TextView(context);
-        switchTitle.setText("Kompaktní režim");
+        switchTitle.setText(sk ? "Kompaktný režim" : "Kompaktní režim");
         switchTitle.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f);
         switchTitle.setTypeface(Typeface.DEFAULT_BOLD);
         switchTitle.setTextColor(textNormalColor);
         textCol.addView(switchTitle);
 
         TextView switchDesc = new TextView(context);
-        switchDesc.setText("Skryje HomeCredit (splátky) a zmenší graf cenové historie pro úsporu místa na displeji.");
+        switchDesc.setText(sk ? "Skryje ponuku splátok (HomeCredit) a zmenší graf cenovej histórie pre úsporu miesta na displeji." : "Skryje HomeCredit (splátky) a zmenší graf cenové historie pro úsporu místa na displeji.");
         switchDesc.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f);
         switchDesc.setTextColor(textMutedColor);
         switchDesc.setPadding(0, (int) dpToPx(context, 2f), 0, 0);
@@ -146,7 +147,9 @@ public class MorpheSettingsCardView extends LinearLayout {
             @Override
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
                 AlzaPriceChartInjector.setCompactMode(isChecked);
-                String msg = isChecked ? "Kompaktní režim zapnut (HomeCredit skryt)" : "Kompaktní režim vypnut";
+                String msg = isChecked
+                        ? (sk ? "Kompaktný režim zapnutý (HomeCredit skrytý)" : "Kompaktní režim zapnut (HomeCredit skryt)")
+                        : (sk ? "Kompaktný režim vypnutý" : "Kompaktní režim vypnut");
                 Toast.makeText(context, msg, Toast.LENGTH_SHORT).show();
             }
         });
@@ -167,14 +170,14 @@ public class MorpheSettingsCardView extends LinearLayout {
         infoSection.setLayoutParams(infoLp);
 
         TextView infoTitle = new TextView(context);
-        infoTitle.setText("Podporované trhy: Česko a Slovensko");
+        infoTitle.setText(sk ? "Podporované trhy: Česko a Slovensko" : "Podporované trhy: Česko a Slovensko");
         infoTitle.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f);
         infoTitle.setTypeface(Typeface.DEFAULT_BOLD);
         infoTitle.setTextColor(brandGreen);
         infoSection.addView(infoTitle);
 
         TextView infoDesc = new TextView(context);
-        infoDesc.setText("Hlídač shopů sleduje vývoj cen výhradně pro e-shopy Alza.cz (ČR) a Alza.sk (SR). V Německu (alza.de), Rakousku (alza.at) ani Maďarsku (alza.hu) data o cenové historii nejsou k dispozici.");
+        infoDesc.setText(sk ? "Hlídač shopov sleduje vývoj cien výhradne pre e-shopy Alza.sk (SR) a Alza.cz (ČR). V Nemecku (alza.de), Rakúsku (alza.at) ani Maďarsku (alza.hu) údaje o cenovej histórii nie sú k dispozícii." : "Hlídač shopů sleduje vývoj cen výhradně pro e-shopy Alza.cz (ČR) a Alza.sk (SR). V Německu (alza.de), Rakousku (alza.at) ani Maďarsku (alza.hu) data o cenové historii nejsou k dispozici.");
         infoDesc.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f);
         infoDesc.setTextColor(textMutedColor);
         infoDesc.setPadding(0, (int) dpToPx(context, 3f), 0, 0);
