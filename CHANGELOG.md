@@ -1,3 +1,9 @@
+## [1.6.9](https://github.com/mmenzyns/morphe-patches/compare/v1.6.8...v1.6.9) (2026-11-02)
+
+### 🐛 Bug Fixes
+
+* **alza:** ensure compose bindings initialized and robust composer end group detection ([3d9beb6](https://github.com/mmenzyns/morphe-patches/commit/3d9beb6b45144aaf22ef96010af7788c46862d4c))
+
 ## [1.6.8](https://github.com/mmenzyns/morphe-patches/compare/v1.6.7...v1.6.8) (2026-11-02)
 
 ### 🐛 Bug Fixes
