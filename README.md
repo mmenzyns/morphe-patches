@@ -19,6 +19,24 @@ Click the button below, or manually add this repo url to Morphe Manager: https:/
 ## 🩹 Patches list
 
 <!-- PATCHES_START EXPANDED -->
+> **[v1.6.7](https://github.com/mmenzyns/morphe-patches/releases/tag/v1.6.7)**&nbsp;&nbsp;•&nbsp;&nbsp;`main`&nbsp;&nbsp;•&nbsp;&nbsp;1 patches total
+<details open>
+<summary>📦 Alza&nbsp;&nbsp;•&nbsp;&nbsp;1 patch</summary>
+<br>
+
+**Package name:** `cz.alza.eshop`
+
+**🎯 Supported versions:**
+
+| 2026.21.0 |
+| :---: |
+
+| 💊&nbsp;Patch | 📜&nbsp;Description | ⚙️&nbsp;Options |
+|----------|----------------|-----------|
+| [Alza Hlídač shopů Price History (CZ / SK)](#alza-hl-da-shop-price-history-cz-sk) | Displays inline price history chart from Hlídač shopů in product detail screen for Czech Republic and Slovakia (alza.cz / alza.sk). Includes compact mode replacing HomeCredit installments and settings in Menu. |  |
+
+</details>
+
 <!-- PATCHES_END -->
 
 ### 🛠️ Building locally

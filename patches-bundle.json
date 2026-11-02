@@ -1,7 +1,7 @@
 {
-  "created_at": "",
-  "description": "",
-  "download_url": "",
+  "created_at": "2026-11-02T17:05:31",
+  "description": "## [1.6.7](https://github.com/mmenzyns/morphe-patches/compare/v1.6.6...v1.6.7) (2026-11-02)\n\n### 🐛 Bug Fixes\n\n* **alza:** address code review stability, register safety and template cleanup ([8100522](https://github.com/mmenzyns/morphe-patches/commit/8100522474825e9512599ef8404a35a508ca3d39))",
+  "download_url": "https://github.com/mmenzyns/morphe-patches/releases/download/v1.6.7/patches-1.6.7.mpp",
   "signature_download_url": "",
-  "version": ""
+  "version": "1.6.7"
 }
