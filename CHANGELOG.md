@@ -1,3 +1,9 @@
+## [1.5.0](https://github.com/mmenzyns/morphe-patches/compare/v1.4.1...v1.5.0) (2026-11-02)
+
+### ✨ New Features
+
+* **alza:** support Slovak market with EUR currency and Slovak localization ([45b9286](https://github.com/mmenzyns/morphe-patches/commit/45b9286d83d7411f5d45d085d7f6047fbdb755b1))
+
 ## [1.4.1](https://github.com/mmenzyns/morphe-patches/compare/v1.4.0...v1.4.1) (2026-11-02)
 
 ### 🐛 Bug Fixes
