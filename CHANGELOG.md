@@ -1,3 +1,9 @@
+## [1.3.7](https://github.com/mmenzyns/morphe-patches/compare/v1.3.6...v1.3.7) (2026-11-02)
+
+### 🐛 Bug Fixes
+
+* **alza:** Implement equals and hashCode on Compose AndroidView proxies to prevent crash on recomposition ([2380159](https://github.com/mmenzyns/morphe-patches/commit/23801594c1798996bacdb71833369a0d75297d77))
+
 ## [1.3.6](https://github.com/mmenzyns/morphe-patches/compare/v1.3.5...v1.3.6) (2026-11-02)
 
 ### 🐛 Bug Fixes
