@@ -1,3 +1,9 @@
+## [1.6.5](https://github.com/mmenzyns/morphe-patches/compare/v1.6.4...v1.6.5) (2026-11-02)
+
+### 🐛 Bug Fixes
+
+* **alza:** implement fully responsive layout and proportional drawing for compact chart ([29a7de1](https://github.com/mmenzyns/morphe-patches/commit/29a7de11b296abaeaed8524984d92a684a827797))
+
 ## [1.6.4](https://github.com/mmenzyns/morphe-patches/compare/v1.6.3...v1.6.4) (2026-11-02)
 
 ### 🐛 Bug Fixes
