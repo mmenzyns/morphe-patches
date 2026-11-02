@@ -193,6 +193,10 @@ public class PriceHistoryChartView extends View {
     @Override
     public boolean onTouchEvent(MotionEvent event) {
         if (event.getAction() == MotionEvent.ACTION_UP) {
+            if (AlzaPriceChartInjector.isCompactMode()) {
+                openHlidacWeb();
+                return true;
+            }
             float x = event.getX();
             float y = event.getY();
             int width = getWidth();
@@ -241,17 +245,31 @@ public class PriceHistoryChartView extends View {
 
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-        int width = MeasureSpec.getSize(widthMeasureSpec);
-        if (width <= 0) {
-            try {
-                width = getResources().getDisplayMetrics().widthPixels;
-            } catch (Throwable ignored) {
-                width = 1080;
-            }
-        }
         boolean compact = AlzaPriceChartInjector.isCompactMode();
-        int expandedHeightDp = compact ? 135 : 210;
-        int targetHeight = isCollapsed ? (int) dpToPx(38f) : (int) dpToPx(expandedHeightDp);
+        int width;
+        int targetHeight;
+
+        if (compact) {
+            int specSize = MeasureSpec.getSize(widthMeasureSpec);
+            int desiredWidth = (int) dpToPx(150f);
+            if (specSize > 0 && specSize < desiredWidth) {
+                width = specSize;
+            } else {
+                width = desiredWidth;
+            }
+            targetHeight = (int) dpToPx(48f);
+        } else {
+            width = MeasureSpec.getSize(widthMeasureSpec);
+            if (width <= 0) {
+                try {
+                    width = getResources().getDisplayMetrics().widthPixels;
+                } catch (Throwable ignored) {
+                    width = 1080;
+                }
+            }
+            int expandedHeightDp = 210;
+            targetHeight = isCollapsed ? (int) dpToPx(38f) : (int) dpToPx(expandedHeightDp);
+        }
         setMeasuredDimension(width, targetHeight);
     }
 
@@ -302,11 +320,119 @@ public class PriceHistoryChartView extends View {
         canvas.drawRoundRect(cardRect, cornerRadiusPx, cornerRadiusPx, cardBgPaint);
         canvas.drawRoundRect(cardRect, cornerRadiusPx, cornerRadiusPx, cardBorderPaint);
 
-        if (isCollapsed) {
+        if (AlzaPriceChartInjector.isCompactMode()) {
+            drawCompactCard(canvas, width, height, dark);
+        } else if (isCollapsed) {
             drawCollapsedState(canvas, width, height, dark);
         } else {
             drawExpandedState(canvas, width, height, dark);
         }
+    }
+
+    private void drawCompactCard(Canvas canvas, int width, int height, boolean dark) {
+        boolean sk = AlzaPriceChartInjector.isSlovak(getContext());
+        float padH = dpToPx(8f);
+        float padV = dpToPx(5f);
+
+        // 1. Header line: Logo on left, Discount / Min Price on right
+        float logoHeight = dpToPx(11f);
+        float logoLeft = padH;
+        float logoTop = padV + dpToPx(1f);
+        HlidacLogo.draw(canvas, logoLeft, logoTop, logoHeight, dark);
+
+        // Right side of header: Real discount percentage or min price
+        if (data != null && data.hasData()) {
+            PriceHistoryData.DiscountCalculation calc = data.calculateHlidacShopuDiscount();
+            if (calc != null && calc.realDiscountPercent > 0) {
+                String badgeText = "-" + Math.round(calc.realDiscountPercent) + " %";
+                discountValuePaint.setTextSize(dpToPx(10.5f));
+                discountValuePaint.setColor(Color.parseColor("#00A651"));
+                float textW = discountValuePaint.measureText(badgeText);
+                canvas.drawText(badgeText, width - padH - textW, padV + dpToPx(9.5f), discountValuePaint);
+            } else if (data.getMinPrice() != null && data.getMinPrice() > 0) {
+                String minText = "Min: " + formatPrice(data.getMinPrice());
+                labelPaint.setTextSize(dpToPx(8.5f));
+                float textW = labelPaint.measureText(minText);
+                canvas.drawText(minText, width - padH - textW, padV + dpToPx(9f), labelPaint);
+            }
+        }
+
+        // 2. Mini Sparkline Chart
+        float plotLeft = padH;
+        float plotTop = padV + dpToPx(13f);
+        float plotRight = width - padH;
+        float plotBottom = height - padV - dpToPx(2f);
+
+        switch (state) {
+            case LOADING:
+                drawCenteredText(canvas, "...", plotLeft, plotTop, plotRight, plotBottom, subtitlePaint);
+                break;
+            case EMPTY:
+            case UNSUPPORTED_COUNTRY:
+            case ERROR:
+                labelPaint.setTextSize(dpToPx(8.5f));
+                drawCenteredText(canvas, sk ? "Bez histórie" : "Bez historie", plotLeft, plotTop, plotRight, plotBottom, labelPaint);
+                break;
+            case LOADED:
+                drawCompactSparkline(canvas, plotLeft, plotTop, plotRight, plotBottom, dark);
+                break;
+        }
+    }
+
+    private void drawCompactSparkline(Canvas canvas, float left, float top, float right, float bottom, boolean dark) {
+        if (data == null || !data.hasData()) return;
+
+        List<PriceHistoryData.PricePoint> points = data.getCurrentPricePoints();
+        int count = points.size();
+        if (count < 2) return;
+
+        double minPrice = data.getMinPrice() != null ? data.getMinPrice() : points.get(0).price;
+        double maxPrice = data.getMaxPrice() != null ? data.getMaxPrice() : points.get(0).price;
+        if (maxPrice <= minPrice) {
+            maxPrice = minPrice + 1.0;
+        }
+
+        currentCurvePath.reset();
+        currentAreaPath.reset();
+
+        float width = right - left;
+        float height = bottom - top;
+        float stepX = width / (count - 1f);
+
+        for (int i = 0; i < count; i++) {
+            float x = left + (i * stepX);
+            double price = points.get(i).price;
+            float norm = (float) ((price - minPrice) / (maxPrice - minPrice));
+            float y = bottom - (norm * height);
+
+            if (i == 0) {
+                currentCurvePath.moveTo(x, y);
+                currentAreaPath.moveTo(x, bottom);
+                currentAreaPath.lineTo(x, y);
+            } else {
+                currentCurvePath.lineTo(x, y);
+                currentAreaPath.lineTo(x, y);
+            }
+
+            if (i == count - 1) {
+                currentAreaPath.lineTo(x, bottom);
+                currentAreaPath.close();
+            }
+        }
+
+        int curveColor = Color.parseColor("#00A651");
+        int startGradColor = Color.argb(dark ? 65 : 45, Color.red(curveColor), Color.green(curveColor), Color.blue(curveColor));
+        int endGradColor = Color.argb(0, Color.red(curveColor), Color.green(curveColor), Color.blue(curveColor));
+
+        currentAreaPaint.setShader(new LinearGradient(
+                0, top, 0, bottom,
+                startGradColor, endGradColor,
+                Shader.TileMode.CLAMP
+        ));
+
+        canvas.drawPath(currentAreaPath, currentAreaPaint);
+        currentCurvePaint.setStrokeWidth(dpToPx(1.5f));
+        canvas.drawPath(currentCurvePath, currentCurvePaint);
     }
 
     private void drawCollapsedState(Canvas canvas, int width, int height, boolean dark) {

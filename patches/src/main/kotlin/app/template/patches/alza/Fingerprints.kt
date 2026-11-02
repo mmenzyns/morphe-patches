@@ -98,15 +98,14 @@ object SettingsAndSecurityContentFingerprint : Fingerprint(
     }
 )
 
-object AccountMenuContentFingerprint : Fingerprint(
+object AppMenuInfoFingerprint : Fingerprint(
     returnType = "V",
     isStatic = true,
     custom = { method, _ ->
-        method.parameterTypes.size == 10 &&
-            method.parameterTypes[0] == "Z" &&
-            method.parameterTypes[9] == "I" &&
+        method.parameterTypes.size == 3 &&
+            method.parameterTypes[2] == "I" &&
             method.implementation?.instructions?.any { inst ->
-                (inst as? ReferenceInstruction)?.reference?.toString()?.contains("cz/alza/base/android/menu/common/ui/model/Actions") == true
+                (inst as? ReferenceInstruction)?.reference?.toString()?.contains("AppMenuInfo;->getAppVersion") == true
             } == true
     }
 )
