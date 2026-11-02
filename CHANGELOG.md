@@ -1,3 +1,9 @@
+## [1.6.4](https://github.com/mmenzyns/morphe-patches/compare/v1.6.3...v1.6.4) (2026-11-02)
+
+### 🐛 Bug Fixes
+
+* **alza:** adjust compact chart size to fit inline next to price without wrapping ([f334185](https://github.com/mmenzyns/morphe-patches/commit/f3341850678db4e4d51b0a0d2f0ef53c89ad6090))
+
 ## [1.6.3](https://github.com/mmenzyns/morphe-patches/compare/v1.6.2...v1.6.3) (2026-11-02)
 
 ### 🐛 Bug Fixes
