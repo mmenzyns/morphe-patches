@@ -12,9 +12,28 @@ object GodFragmentCreateViewFingerprint : Fingerprint(
         "Landroid/view/LayoutInflater;",
         "Landroid/view/ViewGroup;",
         "Landroid/os/Bundle;"
-    ),
-    filters = listOf(
-        opcode(Opcode.RETURN_OBJECT)
+    )
+)
+
+object ProductDetailParamsWithIdFingerprint : Fingerprint(
+    definingClass = "Lcz/alza/base/api/product/detail/api/model/data/ProductDetailParams\$WithId;",
+    name = "<init>",
+    parameters = listOf(
+        "I",
+        "Lcz/alza/base/api/product/detail/api/model/data/ProductDetailContinue;",
+        "Lcz/alza/base/api/product/detail/api/model/data/ProductDetailParams\$HashedProductIdentifier;",
+        "Lcz/alza/base/api/product/detail/api/model/data/ProductDetailParams\$ProductInfo;"
+    )
+)
+
+object ProductDetailParamsWithMetaFingerprint : Fingerprint(
+    definingClass = "Lcz/alza/base/api/product/detail/api/model/data/ProductDetailParams\$WithMeta;",
+    name = "<init>",
+    parameters = listOf(
+        "Lcz/alza/base/utils/navigation/model/data/Meta;",
+        "Lcz/alza/base/api/product/detail/api/model/data/ProductDetailContinue;",
+        "Lcz/alza/base/api/product/detail/api/model/data/ProductDetailParams\$HashedProductIdentifier;",
+        "Lcz/alza/base/api/product/detail/api/model/data/ProductDetailParams\$ProductInfo;"
     )
 )
 
@@ -27,3 +46,15 @@ object ProductPriceSectionFingerprint : Fingerprint(
     }
 )
 
+object AndroidViewFingerprint : Fingerprint(
+    returnType = "V",
+    isStatic = true,
+    custom = { method, _ ->
+        if (method.parameterTypes.size != 6) {
+            false
+        } else {
+            val p = method.parameterTypes
+            p[4] == "I" && p[5] == "I" && p[0] == p[2] && !p[0].startsWith("Ljava/") && p[1] != "I" && p[3] != "I"
+        }
+    }
+)

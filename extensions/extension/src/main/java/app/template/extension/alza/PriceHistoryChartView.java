@@ -36,7 +36,6 @@ public class PriceHistoryChartView extends View {
     private PriceHistoryData data;
     private String commodityId;
     private boolean isCollapsed = false;
-    private boolean isDismissed = false;
 
     // Paints
     private Paint cardBgPaint;
@@ -134,6 +133,10 @@ public class PriceHistoryChartView extends View {
         this.commodityId = commodityId;
     }
 
+    public String getCommodityId() {
+        return commodityId;
+    }
+
     public void setData(PriceHistoryData data) {
         this.data = data;
         if (data != null && data.hasData()) {
@@ -164,10 +167,6 @@ public class PriceHistoryChartView extends View {
         return isCollapsed;
     }
 
-    public boolean isDismissed() {
-        return isDismissed;
-    }
-
     @Override
     public boolean onTouchEvent(MotionEvent event) {
         if (event.getAction() == MotionEvent.ACTION_UP) {
@@ -175,14 +174,7 @@ public class PriceHistoryChartView extends View {
             float y = event.getY();
             int width = getWidth();
 
-            // 1. Close button "✕" in top-right area (last 44dp)
-            if (x >= width - dpToPx(44f) && y <= dpToPx(40f)) {
-                isDismissed = true;
-                setVisibility(View.GONE);
-                return true;
-            }
-
-            // 2. Toggle button area or header when collapsed
+            // 1. Toggle button area or header when collapsed
             if (isCollapsed) {
                 // Tapping collapsed bar expands it
                 isCollapsed = false;
@@ -193,8 +185,8 @@ public class PriceHistoryChartView extends View {
                 // When expanded:
                 // Check if touch is on top header
                 if (y <= dpToPx(40f)) {
-                    // Check toggle button area [width - 90dp .. width - 44dp]
-                    if (x >= width - dpToPx(90f)) {
+                    // Check toggle button area on the right [width - 70dp .. width]
+                    if (x >= width - dpToPx(70f)) {
                         isCollapsed = true;
                         requestLayout();
                         invalidate();
@@ -298,12 +290,8 @@ public class PriceHistoryChartView extends View {
         }
 
         // 3. "▲ Graf" toggle
-        float expandX = width - paddingPx - dpToPx(50f);
+        float expandX = width - paddingPx - dpToPx(48f);
         canvas.drawText("▲ Graf", expandX, midY + dpToPx(4f), toggleTextPaint);
-
-        // 4. "✕" close button
-        float closeX = width - paddingPx - dpToPx(8f);
-        canvas.drawText("✕", closeX, midY + dpToPx(4f), subtitlePaint);
     }
 
     private void drawExpandedState(Canvas canvas, int width, int height, boolean dark) {
@@ -314,12 +302,9 @@ public class PriceHistoryChartView extends View {
         float logoHeight = dpToPx(16f);
         HlidacLogo.draw(canvas, headerLeft, headerTop - dpToPx(12f), logoHeight, dark);
 
-        // 2. Controls on the right: "▼ Sbalit" and "✕"
-        float toggleX = width - paddingPx - dpToPx(60f);
+        // 2. Control on the right: "▼ Sbalit"
+        float toggleX = width - paddingPx - dpToPx(52f);
         canvas.drawText("▼ Sbalit", toggleX, headerTop - dpToPx(0.5f), toggleTextPaint);
-
-        float closeX = width - paddingPx - dpToPx(8f);
-        canvas.drawText("✕", closeX, headerTop - dpToPx(0.5f), subtitlePaint);
 
         // 3. SKUTEČNÁ SLEVA (Čistě naformátovaná, bez zbytečných čísel pod logem)
         if (state == State.LOADED && data != null) {
