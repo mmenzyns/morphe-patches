@@ -4,6 +4,7 @@ import app.morphe.patcher.extensions.InstructionExtensions.addInstructions
 import app.morphe.patcher.patch.bytecodePatch
 import app.template.patches.shared.Constants.COMPATIBILITY_ALZA
 import com.android.tools.smali.dexlib2.AccessFlags
+import com.android.tools.smali.dexlib2.Opcode
 import com.android.tools.smali.dexlib2.iface.instruction.Instruction
 import com.android.tools.smali.dexlib2.iface.instruction.OneRegisterInstruction
 import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
@@ -15,11 +16,13 @@ private fun isComposerEndGroup(
     instruction: Instruction,
     composerClass: CharSequence? = null
 ): Boolean {
-    if (!instruction.opcode.name.startsWith("INVOKE_INTERFACE")) return false
+    if (instruction.opcode != Opcode.INVOKE_INTERFACE && instruction.opcode != Opcode.INVOKE_INTERFACE_RANGE) return false
     val methodRef = (instruction as? ReferenceInstruction)?.reference as? MethodReference ?: return false
-    if (methodRef.parameterTypes != listOf("Z") || methodRef.returnType != "V") return false
-    if (composerClass != null && composerClass != "Ljava/lang/Object;") {
-        return methodRef.definingClass == composerClass.toString()
+    if (methodRef.parameterTypes.size != 1 || methodRef.parameterTypes[0].toString() != "Z") return false
+    if (methodRef.returnType != "V") return false
+    val compStr = composerClass?.toString()
+    if (compStr != null && compStr != "Ljava/lang/Object;") {
+        return methodRef.definingClass == compStr
     }
     return true
 }
@@ -77,17 +80,19 @@ val alzaPriceHistoryPatch = bytecodePatch(
         // 4. Hook ProductPrices.getAlternativePrice to allow Compact Mode to eliminate HomeCredit / installments cleanly
         val altPriceMethod = ProductPricesGetAlternativePriceFingerprint.method
         val altInstructions = altPriceMethod.implementation!!.instructions
-        val returnIdx = altInstructions.indexOfLast { it.opcode.name.startsWith("RETURN_OBJECT") }
-        val returnInstruction = altInstructions[returnIdx] as OneRegisterInstruction
-        val returnReg = returnInstruction.registerA
-        altPriceMethod.addInstructions(
-            returnIdx,
-            """
-                invoke-static {p0, v$returnReg}, $EXTENSION_CLASS->filterAlternativePrice(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
-                move-result-object v$returnReg
-                check-cast v$returnReg, ${altPriceMethod.returnType}
-            """
-        )
+        val returnIdx = altInstructions.indexOfLast { it.opcode == Opcode.RETURN_OBJECT }
+        if (returnIdx != -1) {
+            val returnInstruction = altInstructions[returnIdx] as OneRegisterInstruction
+            val returnReg = returnInstruction.registerA
+            altPriceMethod.addInstructions(
+                returnIdx,
+                """
+                    invoke-static {p0, v$returnReg}, $EXTENSION_CLASS->filterAlternativePrice(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+                    move-result-object v$returnReg
+                    check-cast v$returnReg, ${altPriceMethod.returnType}
+                """
+            )
+        }
 
         // 5. Hook PriceSectionContentFingerprint (f5m.invoke) - the FlowRow price section composable
         // This injects the chart as the child of FlowRow after both branches of AlternativePrice
@@ -101,7 +106,7 @@ val alzaPriceHistoryPatch = bytecodePatch(
 
         val endIndex = if (altIndex != -1) {
             val idx = instructions.drop(altIndex).indexOfFirst { instruction ->
-                instruction.opcode.name.startsWith("RETURN") ||
+                instruction.opcode.name.startsWith("return") ||
                     (instruction as? ReferenceInstruction)?.reference?.toString()?.contains("Lkotlin/Unit;->") == true
             }
             if (idx != -1) altIndex + idx else instructions.size
