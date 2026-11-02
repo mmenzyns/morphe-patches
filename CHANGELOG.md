@@ -1,3 +1,9 @@
+## [1.4.0](https://github.com/mmenzyns/morphe-patches/compare/v1.3.7...v1.4.0) (2026-11-02)
+
+### ✨ New Features
+
+* **alza:** add compact mode and CZ/SK market detection with Morphe settings ([08e06ae](https://github.com/mmenzyns/morphe-patches/commit/08e06aeb400eb93e7ac3922ec9163d87afba95a9))
+
 ## [1.3.7](https://github.com/mmenzyns/morphe-patches/compare/v1.3.6...v1.3.7) (2026-11-02)
 
 ### 🐛 Bug Fixes
