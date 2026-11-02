@@ -49,11 +49,13 @@ val alzaPriceHistoryPatch = bytecodePatch(
         val androidViewMethod = AndroidViewFingerprint.method.name
         val function1Class = AndroidViewFingerprint.method.parameterTypes[0].toString().removePrefix("L").removeSuffix(";").replace("/", ".")
 
-        // 4. Hook w4m.i (Product detail price section composable)
-        val priceMethod = ProductPriceSectionFingerprint.method
+        // 4. Hook PriceSectionContentFingerprint (f5m.invoke) - the FlowRow price section composable
+        // This injects the chart as the 3rd child of FlowRow (after both Price and Home Credit / installments)
+        // so Price and Home Credit remain side-by-side on Line 1, and the chart wraps to Line 2 underneath both.
+        val contentMethod = PriceSectionContentFingerprint.method
 
-        // A. Pass discovered AndroidView bindings at method entry
-        priceMethod.addInstructions(
+        // Pass discovered AndroidView bindings at method entry
+        contentMethod.addInstructions(
             0,
             """
                 const-string v0, "$androidViewClass"
@@ -63,31 +65,41 @@ val alzaPriceHistoryPatch = bytecodePatch(
             """
         )
 
-        // B. Inject onPriceSectionCompose immediately after the price Column closes (last .q before .W)
-        // This ensures the chart executes AFTER both branches (with VAT and without VAT) have merged.
-        // If injected before the last .q, the branch with VAT jumps over the instruction via goto.
-        val instructions = priceMethod.implementation!!.instructions
-        val skipIndex = instructions.indexOfFirst { instruction ->
-            val ref = (instruction as? ReferenceInstruction)?.reference?.toString() ?: ""
-            ref.contains(";->W()V") || ref.contains("skipToGroupEnd")
+        val instructions = contentMethod.implementation!!.instructions
+        val altIndex = instructions.indexOfFirst { instruction ->
+            (instruction as? ReferenceInstruction)?.reference?.toString()?.contains("getAlternativePrice") == true
         }
 
-        val targetIndex = if (skipIndex != -1) {
-            val lastQBeforeSkip = instructions.take(skipIndex).indexOfLast { instruction ->
-                val ref = (instruction as? ReferenceInstruction)?.reference?.toString() ?: ""
-                ref.contains(";->q(Z)V") || ref.contains("endReplaceableGroup") || ref.contains("endNode")
+        val wIndex = if (altIndex != -1) {
+            val idx = instructions.drop(altIndex).indexOfFirst { instruction ->
+                (instruction as? ReferenceInstruction)?.reference?.toString()?.contains(";->W()V") == true
             }
-            if (lastQBeforeSkip != -1) lastQBeforeSkip + 1 else skipIndex
+            if (idx != -1) altIndex + idx else instructions.size
         } else {
-            instructions.size - 1
+            instructions.size
         }
 
-        // p4 (v36) is Composer
-        priceMethod.addInstructions(
-            targetIndex,
-            """
-                invoke-static/range {p4 .. p4}, $EXTENSION_CLASS->onPriceSectionCompose(Ljava/lang/Object;)V
-            """
-        )
+        // Find all q(Z)V (endReplaceableGroup) calls between getAlternativePrice and W()
+        // These correspond to the ends of both the 'with alternative price' and 'without alternative price' branches.
+        val qIndices = instructions.take(wIndex).mapIndexedNotNull { idx, instruction ->
+            if (idx > altIndex) {
+                val ref = (instruction as? ReferenceInstruction)?.reference?.toString() ?: ""
+                if (ref.contains(";->q(Z)V") || ref.contains("endReplaceableGroup") || ref.contains("endNode")) {
+                    idx
+                } else null
+            } else null
+        }
+
+        // Inject right after each branch's q(Z)V (before the branch's goto).
+        // Sort descending so earlier insertions don't shift later indices.
+        // p2 is the Composer parameter in invoke(RowScope, Composer, Integer)
+        for (qIndex in qIndices.sortedDescending()) {
+            contentMethod.addInstructions(
+                qIndex + 1,
+                """
+                    invoke-static/range {p2 .. p2}, $EXTENSION_CLASS->onPriceSectionCompose(Ljava/lang/Object;)V
+                """
+            )
+        }
     }
 }

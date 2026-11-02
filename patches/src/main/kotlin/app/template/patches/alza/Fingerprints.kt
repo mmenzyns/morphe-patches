@@ -1,8 +1,7 @@
 package app.template.patches.alza
 
 import app.morphe.patcher.Fingerprint
-import app.morphe.patcher.opcode
-import com.android.tools.smali.dexlib2.Opcode
+import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
 
 object GodFragmentCreateViewFingerprint : Fingerprint(
     definingClass = "Lcz/alza/base/delegate/fragment/GodFragment;",
@@ -56,5 +55,20 @@ object AndroidViewFingerprint : Fingerprint(
             val p = method.parameterTypes
             p[4] == "I" && p[5] == "I" && p[0] == p[2] && !p[0].startsWith("Ljava/") && p[1] != "I" && p[3] != "I"
         }
+    }
+)
+
+object PriceSectionContentFingerprint : Fingerprint(
+    name = "invoke",
+    returnType = "Ljava/lang/Object;",
+    parameters = listOf(
+        "Ljava/lang/Object;",
+        "Ljava/lang/Object;",
+        "Ljava/lang/Object;"
+    ),
+    custom = { method, _ ->
+        method.implementation?.instructions?.any { inst ->
+            (inst as? ReferenceInstruction)?.reference?.toString()?.contains("getAlternativePrice") == true
+        } == true
     }
 )
