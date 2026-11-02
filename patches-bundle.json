@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-11-02T13:40:40",
-  "description": "## [1.6.0](https://github.com/mmenzyns/morphe-patches/compare/v1.5.0...v1.6.0) (2026-11-02)\n\n### ✨ New Features\n\n* **alza:** move settings to Menu, fix compact mode replacing HomeCredit, remove in-app warnings and update CZ/SK metadata ([12549d2](https://github.com/mmenzyns/morphe-patches/commit/12549d2f2f292a6b7bb5973cb2dea5988246a3f9))",
-  "download_url": "https://github.com/mmenzyns/morphe-patches/releases/download/v1.6.0/patches-1.6.0.mpp",
+  "created_at": "2026-11-02T14:40:09",
+  "description": "## [1.6.1](https://github.com/mmenzyns/morphe-patches/compare/v1.6.0...v1.6.1) (2026-11-02)\n\n### 🐛 Bug Fixes\n\n* **alza:** fix menu crash and place compact chart in homecredit slot ([0fd13cd](https://github.com/mmenzyns/morphe-patches/commit/0fd13cd6709054c14e69f711c6052ac4b457afb8))",
+  "download_url": "https://github.com/mmenzyns/morphe-patches/releases/download/v1.6.1/patches-1.6.1.mpp",
   "signature_download_url": "",
-  "version": "1.6.0"
+  "version": "1.6.1"
 }

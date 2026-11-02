@@ -1,3 +1,9 @@
+## [1.6.1](https://github.com/mmenzyns/morphe-patches/compare/v1.6.0...v1.6.1) (2026-11-02)
+
+### 🐛 Bug Fixes
+
+* **alza:** fix menu crash and place compact chart in homecredit slot ([0fd13cd](https://github.com/mmenzyns/morphe-patches/commit/0fd13cd6709054c14e69f711c6052ac4b457afb8))
+
 ## [1.6.0](https://github.com/mmenzyns/morphe-patches/compare/v1.5.0...v1.6.0) (2026-11-02)
 
 ### ✨ New Features
