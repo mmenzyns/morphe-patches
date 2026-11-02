@@ -1,3 +1,9 @@
+## [1.6.3](https://github.com/mmenzyns/morphe-patches/compare/v1.6.2...v1.6.3) (2026-11-02)
+
+### 🐛 Bug Fixes
+
+* **alza:** expand compact chart dimensions and enhance graph rendering ([7dd1769](https://github.com/mmenzyns/morphe-patches/commit/7dd176985d06e32f4a17b611f6d5e8822d191fb9))
+
 ## [1.6.2](https://github.com/mmenzyns/morphe-patches/compare/v1.6.1...v1.6.2) (2026-11-02)
 
 ### 🐛 Bug Fixes
