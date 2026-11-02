@@ -1,3 +1,9 @@
+## [1.3.6](https://github.com/mmenzyns/morphe-patches/compare/v1.3.5...v1.3.6) (2026-11-02)
+
+### 🐛 Bug Fixes
+
+* **alza:** Keep Home Credit next to price and wrap price history chart underneath ([d9777a9](https://github.com/mmenzyns/morphe-patches/commit/d9777a98123a71f8b9dc6537f31024bfa026eb3c))
+
 ## [1.3.5](https://github.com/mmenzyns/morphe-patches/compare/v1.3.4...v1.3.5) (2026-11-02)
 
 ### 🐛 Bug Fixes
