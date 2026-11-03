@@ -248,6 +248,13 @@ public class HlidacShopuClient {
                 }
             }
 
+            if (name != null && !name.trim().isEmpty()) {
+                String active = AlzaPriceChartInjector.getActiveProductName();
+                if (active == null || active.trim().isEmpty()) {
+                    AlzaPriceChartInjector.setActiveProductName(name);
+                }
+            }
+
             // Normalize fractional percentages from API (e.g. 0.12503 -> 12.503%, 0.30006 -> 30.006%)
             if (realDiscount != null && realDiscount > 0.0 && realDiscount <= 1.0) {
                 realDiscount = realDiscount * 100.0;
