@@ -37,10 +37,10 @@ public class MorpheSettingsCardView extends LinearLayout {
         boolean dark = isDarkMode(context);
         final boolean sk = AlzaPriceChartInjector.isSlovak(context);
 
-        int bgColor = dark ? Color.parseColor("#181824") : Color.parseColor("#FFFFFF");
-        int borderColor = dark ? Color.parseColor("#2E2E3E") : Color.parseColor("#E5E7EB");
+        int bgColor = dark ? Color.parseColor("#1E1E1E") : Color.parseColor("#F7F7F8");
+        int borderColor = dark ? Color.parseColor("#333333") : Color.parseColor("#E5E5EA");
         int textNormalColor = dark ? Color.parseColor("#F3F4F6") : Color.parseColor("#111827");
-        int textMutedColor = dark ? Color.parseColor("#9CA3AF") : Color.parseColor("#6B7280");
+        int textMutedColor = dark ? Color.parseColor("#8E8E93") : Color.parseColor("#6B7280");
         int brandGreen = Color.parseColor("#00A651");
 
         // Card background with rounded corners and border

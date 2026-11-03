@@ -18,6 +18,7 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
@@ -56,7 +57,22 @@ public class AlzaPriceChartInjector {
     // Captured product info
     private static volatile String activeCommodityId = null;
     private static volatile String activeProductName = null;
+    private static volatile String sActivePrimaryPriceText = null;
+    private static volatile String sActiveHeaderText = null;
+    private static volatile boolean sHasDiscountBox = false;
     private static volatile WeakReference<Object> lastGodFragment = new WeakReference<Object>(null);
+
+    public static String getActivePrimaryPriceText() {
+        return sActivePrimaryPriceText;
+    }
+
+    public static String getActiveHeaderText() {
+        return sActiveHeaderText;
+    }
+
+    public static boolean hasDiscountBox() {
+        return sHasDiscountBox;
+    }
 
     /**
      * Initialized by bytecode hook with names discovered by Morphe fingerprints.
@@ -267,6 +283,7 @@ public class AlzaPriceChartInjector {
         if (productPrices != null) {
             detectMarketFromPrices(productPrices);
             extractCommodityFromPrices(productPrices);
+            extractPriceTagInfo(productPrices);
         }
         if (isCompactMode()) {
             Log.i(TAG, "filterAlternativePrice: Compact mode active -> eliminating HomeCredit (returning null)");
@@ -275,8 +292,197 @@ public class AlzaPriceChartInjector {
         return originalAltPrice;
     }
 
+    public static void extractPriceTagInfo(Object productPrices) {
+        if (productPrices == null) return;
+        try {
+            // 1. Primary price text
+            Method mGetPrice = null;
+            try {
+                mGetPrice = productPrices.getClass().getMethod("getPrice");
+            } catch (Throwable ignored) {}
+
+            Object priceObj = (mGetPrice != null) ? mGetPrice.invoke(productPrices) : null;
+            if (priceObj != null) {
+                try {
+                    Method mPrimary = priceObj.getClass().getMethod("getPrimaryPrice");
+                    Object primary = mPrimary.invoke(priceObj);
+                    if (primary != null) {
+                        sActivePrimaryPriceText = primary.toString().trim();
+                    }
+                } catch (Throwable ignored) {}
+            }
+
+            if (sActivePrimaryPriceText == null || sActivePrimaryPriceText.isEmpty()) {
+                try {
+                    Method mPrimary = productPrices.getClass().getMethod("getPrimaryPrice");
+                    Object primary = mPrimary.invoke(productPrices);
+                    if (primary != null) {
+                        sActivePrimaryPriceText = primary.toString().trim();
+                    }
+                } catch (Throwable ignored) {}
+            }
+
+            // 2. Detect discount box ("ZLEVŇENO", action badge, beforePrice, claimedDiscount, etc.)
+            boolean hasBox = false;
+            String pricesStr = productPrices.toString().toLowerCase(Locale.ROOT);
+            String priceObjStr = (priceObj != null) ? priceObj.toString().toLowerCase(Locale.ROOT) : "";
+
+            if (pricesStr.contains("zlevněno") || pricesStr.contains("zlevneno") || pricesStr.contains("zľavnené") || pricesStr.contains("zlavnene") ||
+                pricesStr.contains("action") || pricesStr.contains("discount") || pricesStr.contains("friday") || pricesStr.contains("sleva") ||
+                pricesStr.contains("beforeprice") || pricesStr.contains("originalprice") ||
+                priceObjStr.contains("beforeprice") || priceObjStr.contains("originalprice") ||
+                priceObjStr.contains("discount") || priceObjStr.contains("action") || priceObjStr.contains("friday")) {
+                hasBox = true;
+            }
+
+            // Expand candidate objects to inspect (1 level deep)
+            List<Object> scanObjects = new ArrayList<>();
+            scanObjects.add(productPrices);
+            if (priceObj != null) scanObjects.add(priceObj);
+
+            for (Object root : new Object[]{ productPrices, priceObj }) {
+                if (root == null) continue;
+                for (Method m : root.getClass().getMethods()) {
+                    if (m.getParameterTypes().length == 0) {
+                        Class<?> ret = m.getReturnType();
+                        if (!ret.isPrimitive() && !ret.getName().startsWith("android.")
+                                && !ret.getName().startsWith("java.lang.String") && !ret.getName().startsWith("java.lang.Number")) {
+                            String mName = m.getName().toLowerCase(Locale.ROOT);
+                            if (mName.contains("badge") || mName.contains("action") || mName.contains("discount")
+                                    || mName.contains("label") || mName.contains("header") || mName.contains("promotion")
+                                    || mName.contains("tag") || mName.contains("campaign") || mName.contains("price")) {
+                                try {
+                                    Object sub = m.invoke(root);
+                                    if (sub != null && !scanObjects.contains(sub)) {
+                                        scanObjects.add(sub);
+                                    }
+                                } catch (Throwable ignored) {}
+                            }
+                        }
+                    }
+                }
+                for (Field f : root.getClass().getFields()) {
+                    Class<?> fType = f.getType();
+                    if (!fType.isPrimitive() && !fType.getName().startsWith("android.")
+                            && !fType.getName().startsWith("java.lang.String") && !fType.getName().startsWith("java.lang.Number")) {
+                        String fName = f.getName().toLowerCase(Locale.ROOT);
+                        if (fName.contains("badge") || fName.contains("action") || fName.contains("discount")
+                                || fName.contains("label") || fName.contains("header") || fName.contains("promotion")
+                                || fName.contains("tag") || fName.contains("campaign") || fName.contains("price")) {
+                            try {
+                                Object sub = f.get(root);
+                                if (sub != null && !scanObjects.contains(sub)) {
+                                    scanObjects.add(sub);
+                                }
+                            } catch (Throwable ignored) {}
+                        }
+                    }
+                }
+            }
+
+            for (Object obj : scanObjects) {
+                if (obj == null) continue;
+                for (Method m : obj.getClass().getMethods()) {
+                    if (m.getParameterTypes().length == 0) {
+                        String mname = m.getName().toLowerCase(Locale.ROOT);
+                        if (mname.contains("before") || mname.contains("original") || mname.contains("discount")
+                                || mname.contains("action") || mname.contains("badge") || mname.contains("claim")) {
+                            try {
+                                Object val = m.invoke(obj);
+                                if (val != null) {
+                                    if (val instanceof Number && ((Number) val).doubleValue() > 0) {
+                                        hasBox = true;
+                                    } else if (val instanceof String && !((String) val).isEmpty()) {
+                                        hasBox = true;
+                                    } else if (val instanceof Boolean && ((Boolean) val).booleanValue()) {
+                                        hasBox = true;
+                                    }
+                                }
+                            } catch (Throwable ignored) {}
+                        }
+                    }
+                }
+            }
+
+            // 3. Extract longest header/badge/discount text (e.g. "BLACK FRIDAY -30 %", "ZLEVŇENO -8 %")
+            String longestHeader = null;
+            for (Object obj : scanObjects) {
+                if (obj == null) continue;
+                for (Method m : obj.getClass().getMethods()) {
+                    if (m.getParameterTypes().length == 0 && m.getReturnType().equals(String.class)) {
+                        String mname = m.getName().toLowerCase(Locale.ROOT);
+                        try {
+                            Object res = m.invoke(obj);
+                            if (res instanceof String) {
+                                String str = ((String) res).trim();
+                                if (!str.isEmpty() && !str.equals(sActivePrimaryPriceText)) {
+                                    String lower = str.toLowerCase(Locale.ROOT);
+                                    if (str.contains("%") || mname.contains("label") || mname.contains("header")
+                                            || mname.contains("title") || mname.contains("discount") || mname.contains("badge")
+                                            || mname.contains("action") || mname.contains("text")) {
+                                        if (str.contains("%") || lower.contains("zlevn") || lower.contains("friday")
+                                                || lower.contains("akce") || lower.contains("black") || lower.contains("sleva")) {
+                                            hasBox = true;
+                                        }
+                                        if (longestHeader == null || str.length() > longestHeader.length()) {
+                                            longestHeader = str;
+                                        }
+                                    }
+                                }
+                            }
+                        } catch (Throwable ignored) {}
+                    }
+                }
+                for (Field f : obj.getClass().getFields()) {
+                    if (f.getType().equals(String.class)) {
+                        String fname = f.getName().toLowerCase(Locale.ROOT);
+                        try {
+                            Object res = f.get(obj);
+                            if (res instanceof String) {
+                                String str = ((String) res).trim();
+                                if (!str.isEmpty() && !str.equals(sActivePrimaryPriceText)) {
+                                    String lower = str.toLowerCase(Locale.ROOT);
+                                    if (str.contains("%") || fname.contains("label") || fname.contains("header")
+                                            || fname.contains("title") || fname.contains("discount") || fname.contains("badge")) {
+                                        if (str.contains("%") || lower.contains("zlevn") || lower.contains("friday")
+                                                || lower.contains("akce") || lower.contains("black") || lower.contains("sleva")) {
+                                            hasBox = true;
+                                        }
+                                        if (longestHeader == null || str.length() > longestHeader.length()) {
+                                            longestHeader = str;
+                                        }
+                                    }
+                                }
+                            }
+                        } catch (Throwable ignored) {}
+                    }
+                }
+            }
+
+            // Also scan productPrices.toString() with regex for patterns like "BLACK FRIDAY -30 %" or "-8 %"
+            try {
+                String fullStr = productPrices.toString();
+                java.util.regex.Pattern p = java.util.regex.Pattern.compile("(?i)([A-ZÁ-Ž0-9\\-\\s]{2,25}\\s*-[0-9]{1,2}\\s*%)");
+                java.util.regex.Matcher matcher = p.matcher(fullStr);
+                if (matcher.find()) {
+                    String found = matcher.group(1).trim();
+                    if (longestHeader == null || found.length() > longestHeader.length()) {
+                        longestHeader = found;
+                        hasBox = true;
+                    }
+                }
+            } catch (Throwable ignored) {}
+            sActiveHeaderText = longestHeader;
+            sHasDiscountBox = hasBox;
+            Log.i(TAG, "extractPriceTagInfo: primaryPrice=" + sActivePrimaryPriceText + ", headerText=" + sActiveHeaderText + ", hasDiscountBox=" + sHasDiscountBox);
+        } catch (Throwable t) {
+            Log.w(TAG, "extractPriceTagInfo error: " + t.getMessage());
+        }
+    }
+
     public static void extractCommodityFromPrices(Object productPrices) {
         if (productPrices == null) return;
+        if (activeCommodityId != null && !activeCommodityId.isEmpty() && !activeCommodityId.equals("0")) return;
         try {
             for (Method m : productPrices.getClass().getMethods()) {
                 if (m.getParameterTypes().length == 0) {
@@ -297,26 +503,8 @@ public class AlzaPriceChartInjector {
                 }
             }
 
-            for (Field f : productPrices.getClass().getDeclaredFields()) {
-                try {
-                    f.setAccessible(true);
-                    String fname = f.getName().toLowerCase();
-                    if (fname.contains("productid") || fname.contains("commodityid") || fname.equals("id") || fname.equals("a")) {
-                        Object val = f.get(productPrices);
-                        if (val instanceof Number && ((Number) val).intValue() > 0) {
-                            String id = String.valueOf(((Number) val).intValue());
-                            if (activeCommodityId == null || !activeCommodityId.equals(id)) {
-                                activeCommodityId = id;
-                                Log.i(TAG, "extractCommodityFromPrices: captured id=" + id + " from field " + f.getName());
-                            }
-                            return;
-                        }
-                    }
-                } catch (Throwable ignored) {}
-            }
-
             String str = productPrices.toString();
-            java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(?:productId=|-d|commodityId=|id=)([0-9]{4,9})").matcher(str);
+            java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(?:/product/|productId=|-d)([0-9]{4,9})").matcher(str);
             if (matcher.find()) {
                 String id = matcher.group(1);
                 if (activeCommodityId == null || !activeCommodityId.equals(id)) {
@@ -394,6 +582,9 @@ public class AlzaPriceChartInjector {
                 String newId = String.valueOf(productId);
                 if (!newId.equals(activeCommodityId)) {
                     sExplicitCurrency = null;
+                    sActivePrimaryPriceText = null;
+                    sActiveHeaderText = null;
+                    sHasDiscountBox = false;
                 }
                 activeCommodityId = newId;
                 if (productInfo != null) {
@@ -423,11 +614,14 @@ public class AlzaPriceChartInjector {
                     Object href = mh.invoke(meta);
                     if (href != null) {
                         String hrefStr = href.toString();
-                        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(?:/product/|productId=|-d|d)([0-9]{4,9})").matcher(hrefStr);
+                        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(?:/product/|productId=|-d)([0-9]{4,9})").matcher(hrefStr);
                         if (matcher.find()) {
                             String newId = matcher.group(1);
                             if (!newId.equals(activeCommodityId)) {
                                 sExplicitCurrency = null;
+                                sActivePrimaryPriceText = null;
+                                sActiveHeaderText = null;
+                                sHasDiscountBox = false;
                             }
                             activeCommodityId = newId;
                         }
@@ -518,7 +712,8 @@ public class AlzaPriceChartInjector {
             }
             if (sAndroidViewResolvedMethod == null) {
                 for (Method m : androidViewOwnerClass.getMethods()) {
-                    if (m.getParameterTypes().length == 6) {
+                    Class<?>[] pTypes = m.getParameterTypes();
+                    if (pTypes.length == 6 && pTypes[4] == int.class && pTypes[5] == int.class) {
                         sAndroidViewResolvedMethod = m;
                         break;
                     }
@@ -579,6 +774,10 @@ public class AlzaPriceChartInjector {
      * at the end of the price section.
      */
     public static void onPriceSectionCompose(Object composer) {
+        onPriceSectionCompose(null, composer);
+    }
+
+    public static void onPriceSectionCompose(Object rowScope, Object composer) {
         try {
             if (composer == null) return;
 
@@ -778,7 +977,7 @@ public class AlzaPriceChartInjector {
                                 }
                             }
                         }
-                        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(?:/product/|productId=|-d|d=)([0-9]{4,9})").matcher(bundle.toString());
+                        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(?:/product/|productId=|-d)([0-9]{4,9})").matcher(bundle.toString());
                         if (matcher.find()) {
                             activeCommodityId = matcher.group(1);
                             Log.i(TAG, "resolveProductFromGodFragment from Bundle regex: id=" + activeCommodityId);
@@ -896,7 +1095,7 @@ public class AlzaPriceChartInjector {
                     Object href = mh.invoke(meta);
                     if (href != null) {
                         String hrefStr = href.toString();
-                        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(?:/product/|productId=|-d|d)([0-9]{4,9})").matcher(hrefStr);
+                        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(?:/product/|productId=|-d)([0-9]{4,9})").matcher(hrefStr);
                         if (matcher.find()) {
                             return matcher.group(1);
                         }
@@ -906,7 +1105,7 @@ public class AlzaPriceChartInjector {
 
             try {
                 String paramsStr = params.toString();
-                java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(?:/product/|productId=|-d|d)([0-9]{4,9})").matcher(paramsStr);
+                java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(?:/product/|productId=|-d)([0-9]{4,9})").matcher(paramsStr);
                 if (matcher.find()) {
                     return matcher.group(1);
                 }
@@ -916,7 +1115,7 @@ public class AlzaPriceChartInjector {
         if (destination != null) {
             try {
                 String destStr = destination.toString();
-                java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(?:/product/|productId=|-d|d)([0-9]{4,9})").matcher(destStr);
+                java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(?:/product/|productId=|-d)([0-9]{4,9})").matcher(destStr);
                 if (matcher.find()) {
                     return matcher.group(1);
                 }
@@ -968,12 +1167,23 @@ public class AlzaPriceChartInjector {
                 new HlidacShopuClient.Callback() {
                     @Override
                     public void onSuccess(PriceHistoryData data) {
+                        // Discard stale async response if view was rebound to a different product
+                        String currentId = chartView.getCommodityId();
+                        if (currentId != null && !currentId.equals(commodityId)) {
+                            Log.w(TAG, "fetchData onSuccess: discarded stale response for " + commodityId + " (current is " + currentId + ")");
+                            return;
+                        }
                         Log.i(TAG, "fetchData onSuccess: hasData=" + (data != null && data.hasData()));
                         chartView.setData(data);
                     }
 
                     @Override
                     public void onError(Throwable throwable) {
+                        String currentId = chartView.getCommodityId();
+                        if (currentId != null && !currentId.equals(commodityId)) {
+                            Log.w(TAG, "fetchData onError: discarded stale error for " + commodityId);
+                            return;
+                        }
                         Log.e(TAG, "fetchData onError: " + throwable.getMessage(), throwable);
                         chartView.setState(PriceHistoryChartView.State.ERROR);
                     }

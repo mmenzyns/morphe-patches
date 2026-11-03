@@ -23,7 +23,7 @@ private fun isComposerEndGroup(
     }
     val methodRef = (instruction as? ReferenceInstruction)?.reference as? MethodReference ?: return false
     val opcodeName = instruction.opcode.name
-    if (!opcodeName.startsWith("invoke-")) return false
+    if (!opcodeName.startsWith("invoke-interface")) return false
     if (methodRef.parameterTypes.size != 1 || methodRef.parameterTypes[0].toString() != "Z") return false
     if (methodRef.returnType != "V") return false
     val compStr = composerClass?.toString()
@@ -95,6 +95,7 @@ val alzaPriceHistoryPatch = bytecodePatch(
         val androidViewClass = AndroidViewFingerprint.method.definingClass.removePrefix("L").removeSuffix(";").replace("/", ".")
         val androidViewMethod = AndroidViewFingerprint.method.name
         val function1Class = AndroidViewFingerprint.method.parameterTypes[0].toString().removePrefix("L").removeSuffix(";").replace("/", ".")
+        val composerType = AndroidViewFingerprint.method.parameterTypes[3].toString()
 
         // 3. Hook GodFragment.onCreateView: track lifecycle and initialize bindings
         val createViewMethod = GodFragmentCreateViewFingerprint.method
@@ -150,19 +151,19 @@ val alzaPriceHistoryPatch = bytecodePatch(
         // Find all endReplaceableGroup calls between getAlternativePrice and end of method
         // These correspond to the ends of both the 'with alternative price' and 'without alternative price' branches.
         val qIndices = instructions.take(wIndex).mapIndexedNotNull { idx, instruction ->
-            if (idx > altIndex && isComposerEndGroup(instruction, composerClass)) {
+            if (idx > altIndex && isComposerEndGroup(instruction, composerType)) {
                 idx
             } else null
         }
 
         // Inject right after each branch's endReplaceableGroup (before the branch's goto).
         // Sort descending so earlier insertions don't shift later indices.
-        // p2 is the Composer parameter in invoke(RowScope, Composer, Integer)
+        // p1 is RowScope and p2 is Composer in invoke(RowScope, Composer, Integer)
         for (qIndex in qIndices.sortedDescending()) {
             contentMethod.addInstructions(
                 qIndex + 1,
                 """
-                    invoke-static/range {p2 .. p2}, $EXTENSION_CLASS->onPriceSectionCompose(Ljava/lang/Object;)V
+                    invoke-static/range {p1 .. p2}, $EXTENSION_CLASS->onPriceSectionCompose(Ljava/lang/Object;Ljava/lang/Object;)V
                 """
             )
         }
