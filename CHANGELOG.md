@@ -1,3 +1,9 @@
+## [1.9.0-dev.1](https://github.com/mmenzyns/morphe-patches/compare/v1.8.0...v1.9.0-dev.1) (2026-11-06)
+
+### ✨ New Features
+
+* **alza:** improve compact chart proportions, margin and badge detection ([60e009c](https://github.com/mmenzyns/morphe-patches/commit/60e009c1aac92bbf1c5a5c0ffdda2478a7fa0f63))
+
 ## [1.8.0](https://github.com/mmenzyns/morphe-patches/compare/v1.7.0...v1.8.0) (2026-11-03)
 
 ### ✨ New Features
