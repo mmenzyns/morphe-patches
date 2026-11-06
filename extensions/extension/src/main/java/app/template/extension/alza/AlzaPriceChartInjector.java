@@ -917,9 +917,15 @@ public class AlzaPriceChartInjector {
 
             if (pricesStr.contains("zlevněno") || pricesStr.contains("zlevneno") || pricesStr.contains("zľavnené") || pricesStr.contains("zlavnene") ||
                 pricesStr.contains("action") || pricesStr.contains("discount") || pricesStr.contains("friday") || pricesStr.contains("sleva") ||
+                pricesStr.contains("novinka") || pricesStr.contains("nové") || pricesStr.contains("nove") ||
+                pricesStr.contains("benefit") || pricesStr.contains("cenový hit") || pricesStr.contains("cenovy hit") ||
+                pricesStr.contains("hit") || pricesStr.contains("výprodej") || pricesStr.contains("vyprodej") ||
                 pricesStr.contains("beforeprice") || pricesStr.contains("originalprice") ||
                 priceObjStr.contains("beforeprice") || priceObjStr.contains("originalprice") ||
-                priceObjStr.contains("discount") || priceObjStr.contains("action") || priceObjStr.contains("friday")) {
+                priceObjStr.contains("discount") || priceObjStr.contains("action") || priceObjStr.contains("friday") ||
+                priceObjStr.contains("novinka") || priceObjStr.contains("benefit") ||
+                priceObjStr.contains("cenový hit") || priceObjStr.contains("cenovy hit") ||
+                priceObjStr.contains("hit") || priceObjStr.contains("výprodej") || priceObjStr.contains("vyprodej")) {
                 hasBox = true;
             }
 
@@ -1007,9 +1013,15 @@ public class AlzaPriceChartInjector {
                                     String lower = str.toLowerCase(Locale.ROOT);
                                     if (str.contains("%") || mname.contains("label") || mname.contains("header")
                                             || mname.contains("title") || mname.contains("discount") || mname.contains("badge")
-                                            || mname.contains("action") || mname.contains("text")) {
+                                            || mname.contains("action") || mname.contains("text")
+                                            || lower.contains("novin") || lower.contains("benefit") || lower.contains("cenový hit")
+                                            || lower.contains("cenovy hit") || lower.contains("hit") || lower.contains("výprodej")
+                                            || lower.contains("vyprodej")) {
                                         if (str.contains("%") || lower.contains("zlevn") || lower.contains("friday")
-                                                || lower.contains("akce") || lower.contains("black") || lower.contains("sleva")) {
+                                                || lower.contains("akce") || lower.contains("black") || lower.contains("sleva")
+                                                || lower.contains("novin") || lower.contains("benefit") || lower.contains("cenový hit")
+                                                || lower.contains("cenovy hit") || lower.contains("hit") || lower.contains("výprodej")
+                                                || lower.contains("vyprodej")) {
                                             hasBox = true;
                                         }
                                         if (longestHeader == null || str.length() > longestHeader.length()) {
@@ -1031,9 +1043,15 @@ public class AlzaPriceChartInjector {
                                 if (!str.isEmpty() && !str.equals(sActivePrimaryPriceText)) {
                                     String lower = str.toLowerCase(Locale.ROOT);
                                     if (str.contains("%") || fname.contains("label") || fname.contains("header")
-                                            || fname.contains("title") || fname.contains("discount") || fname.contains("badge")) {
+                                            || fname.contains("title") || fname.contains("discount") || fname.contains("badge")
+                                            || lower.contains("novin") || lower.contains("benefit") || lower.contains("cenový hit")
+                                            || lower.contains("cenovy hit") || lower.contains("hit") || lower.contains("výprodej")
+                                            || lower.contains("vyprodej")) {
                                         if (str.contains("%") || lower.contains("zlevn") || lower.contains("friday")
-                                                || lower.contains("akce") || lower.contains("black") || lower.contains("sleva")) {
+                                                || lower.contains("akce") || lower.contains("black") || lower.contains("sleva")
+                                                || lower.contains("novin") || lower.contains("benefit") || lower.contains("cenový hit")
+                                                || lower.contains("cenovy hit") || lower.contains("hit") || lower.contains("výprodej")
+                                                || lower.contains("vyprodej")) {
                                             hasBox = true;
                                         }
                                         if (longestHeader == null || str.length() > longestHeader.length()) {
@@ -1056,6 +1074,14 @@ public class AlzaPriceChartInjector {
                     String found = matcher.group(1).trim();
                     if (longestHeader == null || found.length() > longestHeader.length()) {
                         longestHeader = found;
+                        hasBox = true;
+                    }
+                }
+                if (longestHeader == null) {
+                    java.util.regex.Pattern p2 = java.util.regex.Pattern.compile("(?i)\\b(NOVINKA|BENEFIT SLEVA[^,\"]*|CENOVÝ HIT|CENOVY HIT|VÝPRODEJ|VYPRODEJ|BLACK FRIDAY[^,\"]*)\\b");
+                    java.util.regex.Matcher matcher2 = p2.matcher(fullStr);
+                    if (matcher2.find()) {
+                        longestHeader = matcher2.group(1).trim();
                         hasBox = true;
                     }
                 }
