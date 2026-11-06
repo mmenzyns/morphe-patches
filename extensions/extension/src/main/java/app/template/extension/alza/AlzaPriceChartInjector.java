@@ -910,6 +910,38 @@ public class AlzaPriceChartInjector {
                 } catch (Throwable ignored) {}
             }
 
+            // Fallback: If reflection fails due to R8 obfuscation, extract price via regex from toString()
+            if (sActivePrimaryPriceText == null || sActivePrimaryPriceText.isEmpty()) {
+                try {
+                    String fullPricesStr = productPrices.toString();
+                    java.util.regex.Matcher mPrimary = java.util.regex.Pattern.compile("primaryPrice=([^,\\)\\]]+)").matcher(fullPricesStr);
+                    if (mPrimary.find()) {
+                        String matched = mPrimary.group(1).trim();
+                        if (!matched.isEmpty() && !matched.equalsIgnoreCase("null")) {
+                            sActivePrimaryPriceText = matched;
+                        }
+                    }
+                    if ((sActivePrimaryPriceText == null || sActivePrimaryPriceText.isEmpty()) && priceObj != null) {
+                        java.util.regex.Matcher mPriceObj = java.util.regex.Pattern.compile("primaryPrice=([^,\\)\\]]+)").matcher(priceObj.toString());
+                        if (mPriceObj.find()) {
+                            String matched = mPriceObj.group(1).trim();
+                            if (!matched.isEmpty() && !matched.equalsIgnoreCase("null")) {
+                                sActivePrimaryPriceText = matched;
+                            }
+                        }
+                    }
+                    if (sActivePrimaryPriceText == null || sActivePrimaryPriceText.isEmpty()) {
+                        java.util.regex.Matcher mRegex = java.util.regex.Pattern.compile("([0-9]{1,3}(?:[\\s\\u00A0][0-9]{3})*(?:,[0-9]{1,2}|,-)?(?:\\s*(?:Kč|€))?)").matcher(fullPricesStr);
+                        if (mRegex.find()) {
+                            String matchedPrice = mRegex.group(1).trim();
+                            if (!matchedPrice.isEmpty()) {
+                                sActivePrimaryPriceText = matchedPrice;
+                            }
+                        }
+                    }
+                } catch (Throwable ignored) {}
+            }
+
             // 2. Detect discount box ("ZLEVŇENO", action badge, beforePrice, claimedDiscount, etc.)
             boolean hasBox = false;
             String pricesStr = productPrices.toString().toLowerCase(Locale.ROOT);

@@ -39,6 +39,7 @@ public class PriceHistoryChartView extends View {
     private PriceHistoryData data;
     private String commodityId;
     private boolean isCollapsed = false;
+    private int expandedRightEdgeWidthPx = 0;
 
     // Paints
     private Paint cardBgPaint;
@@ -172,6 +173,9 @@ public class PriceHistoryChartView extends View {
         if (this.commodityId != null && !this.commodityId.equals(commodityId)) {
             this.data = null;
             this.state = State.LOADING;
+        }
+        if (this.commodityId == null || !this.commodityId.equals(commodityId)) {
+            this.expandedRightEdgeWidthPx = 0;
         }
         this.commodityId = commodityId;
     }
@@ -311,17 +315,14 @@ public class PriceHistoryChartView extends View {
             // Celková dostupná šířka řádku ve FlowRow (šířka displeje mínus 32dp padding obrazovky)
             int containerW = (widthSize > 0 && widthSize <= screenWidth) ? widthSize : (screenWidth - (int) dpToPx(32f));
 
-            // 1. Změření hlavní ceny (25sp bold)
             String primaryText = AlzaPriceChartInjector.getActivePrimaryPriceText();
             String safePrimary = (primaryText != null && !primaryText.isEmpty()) ? primaryText : "99 999,-";
-            sMeasurePricePaint.setTextSize(dpToPx(25f));
+            sMeasurePricePaint.setTextSize(dpToPx(26f));
             float primaryTextWidth = sMeasurePricePaint.measureText(safePrimary);
 
-            // 2. Změření řádku "bez DPH  XX XXX,-" pod cenou (13.5sp), který je u krátkých cen širší než samotná cena!
             sMeasurePricePaint.setTextSize(dpToPx(13.5f));
             float vatLineWidth = sMeasurePricePaint.measureText("bez DPH  " + safePrimary);
 
-            // 3. Změření akčního štítku v hlavičce ("BLACK FRIDAY -23 %", "BENEFIT SLEVA -8 %", "NOVINKA")
             String headerText = AlzaPriceChartInjector.getActiveHeaderText();
             boolean hasHeader = (headerText != null && !headerText.isEmpty());
             float headerTextWidth = hasHeader ? sMeasurePricePaint.measureText(headerText) : 0f;
@@ -330,33 +331,32 @@ public class PriceHistoryChartView extends View {
                     || AlzaPriceChartInjector.hasDiscountBox()
                     || (data != null && data.getClaimedDiscount() != null && data.getClaimedDiscount() > 0);
 
-            // 4. Skutečná šířka levého sloupce cenovky v pixelech:
             int priceBlockWidthPx;
             if (hasBox) {
-                // U slevového/akčního boxu je šířka dána nejširším z: minimální šířka boxu (142dp), hlavní cena + padding, štítek + padding, nebo řádek bez DPH
+                // Modrý box NOVINKA a akční boxy mají v Alze minimální šířku ~162dp!
                 priceBlockWidthPx = (int) Math.max(
-                        dpToPx(142f),
+                        dpToPx(162f),
                         Math.max(
-                                vatLineWidth + dpToPx(8f),
-                                Math.max(primaryTextWidth + dpToPx(28f), headerTextWidth + dpToPx(28f))
+                                vatLineWidth + dpToPx(16f),
+                                Math.max(primaryTextWidth + dpToPx(36f), headerTextWidth + dpToPx(34f))
                         )
                 );
             } else {
-                // U prosté ceny bez boxu je šířka dána delším z: hlavní cena nebo řádek "bez DPH"
                 priceBlockWidthPx = (int) Math.max(
-                        dpToPx(108f),
-                        Math.max(primaryTextWidth + dpToPx(14f), vatLineWidth + dpToPx(8f))
+                        dpToPx(120f),
+                        Math.max(primaryTextWidth + dpToPx(20f), vatLineWidth + dpToPx(14f))
                 );
             }
 
-            // 5. Odečtení levého sloupce + 16dp bezpečnostní rezerva pro FlowRow (aby nikdy nedošlo k přetečení na nový řádek)
-            int remainingWidthPx = containerW - priceBlockWidthPx - (int) dpToPx(16f);
+            // Odečteme šířku levého bloku + 24dp mezeru FlowRow:
+            int remainingWidthPx = containerW - priceBlockWidthPx - (int) dpToPx(24f);
+            // Přísný primární strop: u boxu MAX 47 % řádku (aby NOVINKA na 360-390dp displeji nikdy nepřetekla!), u prosté ceny MAX 54 % řádku
+            float safeMaxRatio = hasBox ? 0.47f : 0.54f;
+            int hardCapPx = (int) (containerW * safeMaxRatio);
 
-            // Strop pro případ chybějících dat: u boxu max 58 % řádku, u prosté ceny max 66 % řádku
-            float maxRatio = hasBox ? 0.58f : 0.66f;
-            int hardCapPx = (int) (containerW * maxRatio);
+            int safeBaseWidthPx = Math.max((int) dpToPx(138f), Math.min(remainingWidthPx, hardCapPx));
 
-            width = Math.max((int) dpToPx(150f), Math.min(remainingWidthPx, hardCapPx));
+            width = Math.max(safeBaseWidthPx, this.expandedRightEdgeWidthPx);
             targetHeight = hasBox ? (int) dpToPx(108f) : (int) dpToPx(88f);
 
             if (heightMode == MeasureSpec.EXACTLY && heightSize > 0) {
@@ -380,6 +380,35 @@ public class PriceHistoryChartView extends View {
             }
         }
         setMeasuredDimension(width, targetHeight);
+    }
+
+    @Override
+    protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
+        super.onLayout(changed, left, top, right, bottom);
+        if (AlzaPriceChartInjector.isCompactMode()) {
+            int screenWidth;
+            try {
+                screenWidth = getResources().getDisplayMetrics().widthPixels;
+            } catch (Throwable ignored) {
+                screenWidth = 1080;
+            }
+            int[] loc = new int[2];
+            getLocationOnScreen(loc);
+            int screenX = loc[0];
+            int currentWidthPx = getWidth();
+
+            if (screenX >= dpToPx(95f) && screenX <= screenWidth * 0.60f) {
+                int targetRightEdgePx = screenWidth - (int) dpToPx(20f);
+                int availableToRightEdgePx = targetRightEdgePx - screenX;
+
+                if (availableToRightEdgePx > currentWidthPx + (int) dpToPx(4f)
+                        && availableToRightEdgePx < screenWidth * 0.72f
+                        && this.expandedRightEdgeWidthPx != availableToRightEdgePx) {
+                    this.expandedRightEdgeWidthPx = availableToRightEdgePx;
+                    post(this::requestLayout);
+                }
+            }
+        }
     }
 
     private boolean isDarkMode() {
